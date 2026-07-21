@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import tempfile
 import textwrap
 import unittest
@@ -227,7 +228,7 @@ class CliIntegrationTests(unittest.TestCase):
             git(repo, "add", ".")
             git(repo, "commit", "-m", "baseline")
 
-            fake_pi = repo / "fake-pi"
+            fake_pi = repo / ".git" / "fake-pi"
             fake_pi.write_text(fake_pi_source())
             fake_pi.chmod(0o755)
             result = subprocess.run(

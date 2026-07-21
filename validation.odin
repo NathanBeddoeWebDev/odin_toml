@@ -67,6 +67,7 @@ Semantic_Validation_State :: struct {
 	require_allocator:  bool,
 	path:                [SEMANTIC_MAX_DEPTH + 1]Encode_Diagnostic_Path_Segment,
 	path_count:          int,
+	max_depth:           int,
 }
 
 @(private)
@@ -75,10 +76,12 @@ semantic_validation_state_init :: proc(
 	required_allocator: mem.Allocator = {},
 	require_allocator := false,
 	loc := #caller_location,
+	max_depth := SEMANTIC_MAX_DEPTH,
 ) -> (state: Semantic_Validation_State, err: runtime.Allocator_Error) {
 	state.allocator = allocator
 	state.required_allocator = required_allocator
 	state.require_allocator = require_allocator
+	state.max_depth = max_depth
 	state.cleanup_gate, err = allocator_release_gate_init(allocator, loc)
 	return
 }
@@ -158,11 +161,12 @@ semantic_push_path :: proc(
 	state: ^Semantic_Validation_State,
 	segment: Encode_Diagnostic_Path_Segment,
 ) -> Semantic_Validation_Error {
-	if state.path_count >= SEMANTIC_MAX_DEPTH {
-		state.path[SEMANTIC_MAX_DEPTH] = segment
-		state.path_count = SEMANTIC_MAX_DEPTH + 1
+	if state.path_count >= state.max_depth {
+		state.path[state.path_count] = segment
+		state.path_count += 1
 		err := semantic_diagnostic(state, Mutation_Limit_Error.Maximum_Depth_Exceeded)
-		state.path_count = SEMANTIC_MAX_DEPTH
+		state.path_count -= 1
+		state.path[state.path_count] = {}
 		return err
 	}
 	state.path[state.path_count] = segment
@@ -320,6 +324,12 @@ semantic_validate_container_raw :: proc(
 	}
 	if raw.cap > max(int)/element_size {
 		return -1, semantic_diagnostic(state, Mutation_Limit_Error.Size_Overflow)
+	}
+	// An empty root has no reachable child that could alias its retained
+	// storage. Avoid allocating region scratch so every empty document keeps
+	// the canonical encoder's zero-allocation result contract.
+	if root_table && raw.len == 0 {
+		return -1, nil
 	}
 	return semantic_register_region(
 		state,

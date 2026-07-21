@@ -52,6 +52,10 @@ for mode in minimal speed; do
     -define:ODIN_TEST_THREADS=1 \
     -define:ODIN_TEST_RANDOM_SEED=123456789 \
     -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true
+  odin test tests/semantic_unparse "-o:$mode" "${common[@]}" \
+    -define:ODIN_TEST_THREADS=1 \
+    -define:ODIN_TEST_RANDOM_SEED=123456789 \
+    -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true
   odin test tests/scalar_parse "-o:$mode" "${common[@]}" \
     -define:ODIN_TEST_THREADS=1 \
     -define:ODIN_TEST_RANDOM_SEED=123456789 \

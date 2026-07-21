@@ -61,10 +61,13 @@ scripts/prepare_test_dependencies.sh
 
 All generated sources and tools stay under ignored `build/`. Neither source is vendored, imported, linked, or otherwise used by the runtime packages.
 
-Run the pinned official TOML 1.1 decoder gate with:
+Run the pinned official TOML 1.1 decoder and encoder gates with:
 
 ```sh
 scripts/check_toml_test_decoder.sh
+scripts/check_toml_test_encoder.sh
 ```
 
-The gate builds the test-only public-API adapter, invokes the official runner with literal `-toml=1.1.0`, and rejects any valid failure, invalid failure, or skip. The reviewed machine-readable result and its compiler/platform provenance are preserved in [`tests/corpus/toml-test-decoder-report.json`](tests/corpus/toml-test-decoder-report.json).
+The gates build test-only public-API adapters, invoke the official runner with literal `-toml=1.1.0`, and reject any valid, invalid, or encoder failure or skip. The encoder adapter translates the official tagged-JSON protocol into semantic owners through public lifecycle operations and emits only through `unparse_to_writer`. Reviewed machine-readable results and compiler/platform provenance are preserved in [`tests/corpus/toml-test-decoder-report.json`](tests/corpus/toml-test-decoder-report.json) and [`tests/corpus/toml-test-encoder-report.json`](tests/corpus/toml-test-encoder-report.json).
+
+Replayable generated semantic trees exercise parse/unparse equivalence, canonical byte idempotence, clone independence, insertion and array order, repeated determinism, and allocated/writer byte identity in `tests/semantic_properties`.

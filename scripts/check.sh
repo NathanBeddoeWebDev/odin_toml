@@ -56,6 +56,10 @@ for mode in minimal speed; do
     -define:ODIN_TEST_THREADS=1 \
     -define:ODIN_TEST_RANDOM_SEED=123456789 \
     -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true
+  odin test tests/semantic_properties "-o:$mode" "${common[@]}" \
+    -define:ODIN_TEST_THREADS=1 \
+    -define:ODIN_TEST_RANDOM_SEED=123456789 \
+    -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true
   odin test tests/scalar_parse "-o:$mode" "${common[@]}" \
     -define:ODIN_TEST_THREADS=1 \
     -define:ODIN_TEST_RANDOM_SEED=123456789 \
@@ -69,6 +73,10 @@ for mode in minimal speed; do
     -define:ODIN_TEST_RANDOM_SEED=123456789 \
     -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true
   odin test cmd/toml_test_decoder -file "-o:$mode" "${common[@]}" \
+    -define:ODIN_TEST_THREADS=1 \
+    -define:ODIN_TEST_RANDOM_SEED=123456789 \
+    -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true
+  odin test cmd/toml_test_encoder -file "-o:$mode" "${common[@]}" \
     -define:ODIN_TEST_THREADS=1 \
     -define:ODIN_TEST_RANDOM_SEED=123456789 \
     -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true
@@ -87,6 +95,7 @@ done
 
 scripts/check_float_format_oracle.sh
 scripts/check_toml_test_decoder.sh
+scripts/check_toml_test_encoder.sh
 
 for zone in UTC Pacific/Kiritimati America/Los_Angeles; do
   TZ="$zone" odin test tests/temporal -o:minimal "${common[@]}" \

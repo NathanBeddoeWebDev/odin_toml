@@ -6,9 +6,26 @@ import "core:mem"
 import temporal "temporal"
 
 @(private)
+Canonical_Encoder_Mode :: enum u8 {
+	Sizing,
+	Output,
+	Writer,
+}
+
+@(private)
 Canonical_Encoder :: struct {
-	output: []byte,
-	count:  int,
+	mode:         Canonical_Encoder_Mode,
+	output:       []byte,
+	writer:       io.Writer,
+	count:        int,
+	writer_error: io.Error,
+}
+
+@(private)
+Canonical_Encoding_Plan :: struct {
+	validation:   Semantic_Validation_State,
+	encoded_size: int,
+	initialized:  bool,
 }
 
 @(private)
@@ -68,15 +85,38 @@ canonical_append_bytes :: proc(
 	bytes: []byte,
 	state: ^Semantic_Validation_State,
 ) -> Semantic_Validation_Error {
+	if encoder.mode == .Writer && encoder.writer_error != nil {
+		return nil
+	}
 	if len(bytes) > max(int)-encoder.count {
 		return semantic_diagnostic(state, Mutation_Limit_Error.Size_Overflow)
 	}
 	next := encoder.count+len(bytes)
-	if encoder.output != nil {
+	switch encoder.mode {
+	case .Sizing:
+		encoder.count = next
+	case .Output:
 		assert(next <= len(encoder.output))
 		copy(encoder.output[encoder.count:next], bytes)
+		encoder.count = next
+	case .Writer:
+		written, writer_error := io.write(encoder.writer, bytes)
+		if writer_error != nil {
+			if 0 <= written && written <= len(bytes) {
+				encoder.count += written
+			}
+			encoder.writer_error = writer_error
+			return nil
+		}
+		if written < 0 || written > len(bytes) {
+			encoder.writer_error = .Invalid_Write
+			return nil
+		}
+		encoder.count += written
+		if written < len(bytes) {
+			encoder.writer_error = .Short_Write
+		}
 	}
-	encoder.count = next
 	return nil
 }
 
@@ -435,6 +475,59 @@ canonical_encode_table :: proc(
 	return nil
 }
 
+@(private)
+canonical_encoding_plan_destroy :: proc(
+	plan: ^Canonical_Encoding_Plan,
+	loc := #caller_location,
+) {
+	if plan == nil || !plan.initialized {
+		return
+	}
+	semantic_validation_state_destroy(&plan.validation, loc)
+	plan^ = {}
+}
+
+@(private)
+canonical_encoding_plan_build :: proc(
+	doc: ^Document,
+	max_depth: int,
+	allocator: mem.Allocator,
+	loc: runtime.Source_Code_Location,
+) -> (plan: Canonical_Encoding_Plan, err: Unparse_Error) {
+	if doc == nil || doc.allocator.procedure == nil || doc.root.allocator.procedure == nil {
+		return {}, Unparse_Diagnostic{detail = Unparse_Data_Error_Kind.Invalid_Document}
+	}
+
+	init_error: runtime.Allocator_Error
+	plan.validation, init_error = semantic_validation_state_init(
+		allocator,
+		doc.allocator,
+		true,
+		loc,
+		max_depth = max_depth,
+	)
+	if init_error != nil {
+		return {}, init_error
+	}
+	plan.initialized = true
+	validation_error := semantic_validate_table(&plan.validation, doc.root, true, loc)
+	if validation_error != nil {
+		err = unparse_validation_error(validation_error)
+		canonical_encoding_plan_destroy(&plan, loc)
+		return
+	}
+
+	sizing: Canonical_Encoder
+	sizing_error := canonical_encode_table(&sizing, doc.root, true, &plan.validation)
+	if sizing_error != nil {
+		err = unparse_validation_error(sizing_error)
+		canonical_encoding_plan_destroy(&plan, loc)
+		return
+	}
+	plan.encoded_size = sizing.count
+	return
+}
+
 @(require_results)
 unparse :: proc(
 	doc: ^Document,
@@ -451,45 +544,25 @@ unparse :: proc(
 	} else if max_depth < 1 || max_depth > SEMANTIC_MAX_DEPTH {
 		return "", unparse_configuration_error(.Invalid_Max_Depth)
 	}
-	if doc == nil || doc.allocator.procedure == nil || doc.root.allocator.procedure == nil {
-		return "", Unparse_Diagnostic{detail = Unparse_Data_Error_Kind.Invalid_Document}
-	}
 
-	validation, init_error := semantic_validation_state_init(
-		allocator,
-		doc.allocator,
-		true,
-		loc,
-		max_depth = max_depth,
-	)
-	if init_error != nil {
-		return "", init_error
+	plan, plan_error := canonical_encoding_plan_build(doc, max_depth, allocator, loc)
+	if plan_error != nil {
+		return "", plan_error
 	}
-	validation_error := semantic_validate_table(&validation, doc.root, true, loc)
-	if validation_error != nil {
-		semantic_validation_state_destroy(&validation, loc)
-		return "", unparse_validation_error(validation_error)
-	}
-
-	sizing: Canonical_Encoder
-	sizing_error := canonical_encode_table(&sizing, doc.root, true, &validation)
-	semantic_validation_state_destroy(&validation, loc)
-	if sizing_error != nil {
-		return "", unparse_validation_error(sizing_error)
-	}
-	if sizing.count == 0 {
+	defer canonical_encoding_plan_destroy(&plan, loc)
+	if plan.encoded_size == 0 {
 		return "", nil
 	}
 
-	memory, allocation_error := allocator_allocate(sizing.count, allocator, false, loc)
+	memory, allocation_error := allocator_allocate(plan.encoded_size, allocator, false, loc)
 	if allocation_error != nil {
 		return "", allocation_error
 	}
 	if memory == nil {
 		return "", runtime.Allocator_Error.Out_Of_Memory
 	}
-	output := mem.byte_slice(memory, sizing.count)
-	emitter := Canonical_Encoder{output = output}
+	output := mem.byte_slice(memory, plan.encoded_size)
+	emitter := Canonical_Encoder{mode = .Output, output = output}
 	emission_error := canonical_encode_table(&emitter, doc.root, true, nil)
 	assert(emission_error == nil && emitter.count == len(output))
 	return string(output), nil
@@ -503,6 +576,33 @@ unparse_to_writer :: proc(
 	allocator := context.allocator,
 	loc := #caller_location,
 ) -> Unparse_Error {
-	_, _, _, _, _ = writer, doc, options, allocator, loc
-	unimplemented("semantic writer encoding is scheduled for implementation ticket 16")
+	if allocator.procedure == nil {
+		return unparse_configuration_error(.Invalid_Allocator)
+	}
+	if options == nil {
+		return unparse_configuration_error(.Nil_Options)
+	}
+	max_depth := options.max_depth
+	if max_depth == 0 {
+		max_depth = 128
+	} else if max_depth < 1 || max_depth > SEMANTIC_MAX_DEPTH {
+		return unparse_configuration_error(.Invalid_Max_Depth)
+	}
+	plan, plan_error := canonical_encoding_plan_build(doc, max_depth, allocator, loc)
+	if plan_error != nil {
+		return plan_error
+	}
+	defer canonical_encoding_plan_destroy(&plan, loc)
+	if plan.encoded_size == 0 {
+		return nil
+	}
+
+	emitter := Canonical_Encoder{mode = .Writer, writer = writer}
+	emission_error := canonical_encode_table(&emitter, doc.root, true, nil)
+	assert(emission_error == nil)
+	if emitter.writer_error != nil {
+		return emitter.writer_error
+	}
+	assert(emitter.count == plan.encoded_size)
+	return nil
 }

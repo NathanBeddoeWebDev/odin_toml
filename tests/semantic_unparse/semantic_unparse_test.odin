@@ -1,6 +1,7 @@
 package semantic_unparse_test
 
 import "base:runtime"
+import "core:io"
 import "core:math"
 import "core:mem"
 import "core:reflect"
@@ -142,6 +143,444 @@ make_nested_document :: proc(depth: int, allocator: mem.Allocator) -> toml.Docum
 	assert(err == nil)
 	root[0] = {key = owned_string("root", allocator), value = value}
 	return {root = root, allocator = allocator}
+}
+
+@(test)
+test_unparse_to_writer_matches_allocated_output_and_skips_empty_output :: proc(t: ^testing.T) {
+	doc, parse_error := toml.parse_string(`first = "a value"
+second = [{ nested = [1, 2, 3] }]
+`)
+	assert(parse_error == nil)
+	defer toml.destroy_document(&doc)
+	allocated, allocated_error := toml.unparse(&doc)
+	assert(allocated_error == nil)
+	defer delete(allocated)
+
+	calls: [128]test_support.Scripted_Writer_Call
+	bytes: [1024]byte
+	state: test_support.Scripted_Writer
+	test_support.scripted_writer_init(&state, nil, calls[:], bytes[:])
+	options: toml.Marshal_Options
+	err := toml.unparse_to_writer(
+		test_support.scripted_writer(&state),
+		&doc,
+		&options,
+	)
+	testing.expect(t, err == nil)
+	testing.expect(t, state.write_count > 1)
+	testing.expect_value(t, string(bytes[:state.byte_count]), allocated)
+
+	empty, empty_error := toml.parse_string("")
+	assert(empty_error == nil)
+	defer toml.destroy_document(&empty)
+	empty_state: test_support.Scripted_Writer
+	test_support.scripted_writer_init(&empty_state, nil, calls[:], bytes[:])
+	err = toml.unparse_to_writer(
+		test_support.scripted_writer(&empty_state),
+		&empty,
+		&options,
+	)
+	testing.expect(t, err == nil)
+	testing.expect_value(t, empty_state.write_count, 0)
+}
+
+accepted_prefix_from_calls :: proc(
+	state: ^test_support.Scripted_Writer,
+	output: []byte,
+) -> int {
+	output_count := 0
+	for call in state.calls[:min(state.call_count, len(state.calls))] {
+		if call.mode != .Write || call.returned_count < 0 ||
+		   call.returned_count > i64(call.requested_count) {
+			continue
+		}
+		accepted_count := int(call.returned_count)
+		requested := test_support.requested_bytes(call, state.bytes)
+		assert(output_count+accepted_count <= len(output))
+		copy(output[output_count:output_count+accepted_count], requested[:accepted_count])
+		output_count += accepted_count
+	}
+	return output_count
+}
+
+run_unparse_writer_fault :: proc(
+	t: ^testing.T,
+	doc: ^toml.Document,
+	canonical: string,
+	target_ordinal: int,
+	step: test_support.Scripted_Write,
+	expected_error: io.Error,
+) {
+	steps: [256]test_support.Scripted_Write
+	assert(target_ordinal <= len(steps))
+	for index in 0..<target_ordinal-1 {
+		steps[index] = {count_kind = .Full}
+	}
+	steps[target_ordinal-1] = step
+	calls: [256]test_support.Scripted_Writer_Call
+	requested: [4096]byte
+	state: test_support.Scripted_Writer
+	test_support.scripted_writer_init(
+		&state,
+		steps[:target_ordinal],
+		calls[:],
+		requested[:],
+	)
+
+	events: [256]test_support.Allocator_Event
+	live: [64]test_support.Live_Allocation
+	observed: test_support.Observed_Allocator
+	test_support.observed_allocator_init(&observed, context.allocator, events[:], live[:])
+	options: toml.Marshal_Options
+	err := toml.unparse_to_writer(
+		test_support.scripted_writer(&state),
+		doc,
+		&options,
+		test_support.observed_allocator(&observed),
+	)
+	actual_error, ok := err.(io.Error)
+	testing.expect(t, ok)
+	if ok {
+		testing.expect_value(t, actual_error, expected_error)
+	}
+	testing.expect_value(t, state.write_count, target_ordinal)
+	testing.expect_value(t, state.call_count, target_ordinal)
+	testing.expect_value(t, observed.live_count, 0)
+	testing.expect_value(t, observed.foreign_release_count, 0)
+
+	accepted: [4096]byte
+	accepted_count := accepted_prefix_from_calls(&state, accepted[:])
+	testing.expect(t, accepted_count <= len(canonical))
+	if accepted_count <= len(canonical) {
+		testing.expect_value(
+			t,
+			string(accepted[:accepted_count]),
+			canonical[:accepted_count],
+		)
+	}
+}
+
+@(test)
+test_unparse_to_writer_consumes_each_result_once_with_frozen_error_precedence :: proc(t: ^testing.T) {
+	doc, parse_error := toml.parse_string(`first = "a value"
+second = [{ nested = [1, 2, 3] }]
+third = "last"
+`)
+	assert(parse_error == nil)
+	defer toml.destroy_document(&doc)
+	canonical, canonical_error := toml.unparse(&doc)
+	assert(canonical_error == nil)
+	defer delete(canonical)
+
+	baseline_calls: [256]test_support.Scripted_Writer_Call
+	baseline_bytes: [4096]byte
+	baseline: test_support.Scripted_Writer
+	test_support.scripted_writer_init(
+		&baseline,
+		nil,
+		baseline_calls[:],
+		baseline_bytes[:],
+	)
+	options: toml.Marshal_Options
+	baseline_error := toml.unparse_to_writer(
+		test_support.scripted_writer(&baseline),
+		&doc,
+		&options,
+	)
+	assert(baseline_error == nil)
+	assert(baseline.write_count > 1)
+	assert(baseline.write_count < len(baseline_calls))
+
+	explicit_errors := [?]io.Error{
+		.EOF,
+		.Unexpected_EOF,
+		.Short_Write,
+		.Invalid_Write,
+		.Short_Buffer,
+		.No_Progress,
+		.Invalid_Whence,
+		.Invalid_Offset,
+		.Invalid_Unread,
+		.Negative_Read,
+		.Negative_Write,
+		.Negative_Count,
+		.Buffer_Full,
+		.Unknown,
+		.No_Size,
+		.Permission_Denied,
+		.Closed,
+		.Unsupported,
+	}
+	for ordinal in 1..=baseline.write_count {
+		request_count := baseline.calls[ordinal-1].requested_count
+		assert(request_count > 0)
+
+		for returned_count in 0..<request_count {
+			run_unparse_writer_fault(
+				t,
+				&doc,
+				canonical,
+				ordinal,
+				{count_kind = .Exact, count = i64(returned_count)},
+				.Short_Write,
+			)
+		}
+		run_unparse_writer_fault(
+			t,
+			&doc,
+			canonical,
+			ordinal,
+			{count_kind = .Negative},
+			.Invalid_Write,
+		)
+		run_unparse_writer_fault(
+			t,
+			&doc,
+			canonical,
+			ordinal,
+			{count_kind = .Past_End},
+			.Invalid_Write,
+		)
+
+		for explicit_error in explicit_errors {
+			for returned_count in 0..=request_count {
+				run_unparse_writer_fault(
+					t,
+					&doc,
+					canonical,
+					ordinal,
+					{
+						count_kind = .Exact,
+						count = i64(returned_count),
+						error = explicit_error,
+					},
+					explicit_error,
+				)
+			}
+			run_unparse_writer_fault(
+				t,
+				&doc,
+				canonical,
+				ordinal,
+				{count_kind = .Negative, error = explicit_error},
+				explicit_error,
+			)
+			run_unparse_writer_fault(
+				t,
+				&doc,
+				canonical,
+				ordinal,
+				{count_kind = .Past_End, error = explicit_error},
+				explicit_error,
+			)
+		}
+	}
+}
+
+@(test)
+test_unparse_to_writer_configuration_and_preflight_failures_make_zero_writer_calls :: proc(t: ^testing.T) {
+	valid, parse_error := toml.parse_string("root = [[1]]\n")
+	assert(parse_error == nil)
+	defer toml.destroy_document(&valid)
+	zero_doc: toml.Document
+	nil_allocator: mem.Allocator
+	options := toml.Marshal_Options{max_depth = -1}
+	calls: [16]test_support.Scripted_Writer_Call
+	bytes: [128]byte
+	state: test_support.Scripted_Writer
+	writer := test_support.scripted_writer(&state)
+
+	test_support.scripted_writer_init(&state, nil, calls[:], bytes[:])
+	err := toml.unparse_to_writer(writer, &zero_doc, nil, nil_allocator)
+	configuration, ok := err.(toml.Unparse_Configuration_Error)
+	testing.expect(t, ok)
+	if ok {
+		testing.expect_value(t, configuration, toml.Unparse_Configuration_Error.Invalid_Allocator)
+	}
+	testing.expect_value(t, state.write_count, 0)
+
+	test_support.scripted_writer_init(&state, nil, calls[:], bytes[:])
+	err = toml.unparse_to_writer(writer, &zero_doc, nil)
+	configuration, ok = err.(toml.Unparse_Configuration_Error)
+	testing.expect(t, ok)
+	if ok {
+		testing.expect_value(t, configuration, toml.Unparse_Configuration_Error.Nil_Options)
+	}
+	testing.expect_value(t, state.write_count, 0)
+
+	test_support.scripted_writer_init(&state, nil, calls[:], bytes[:])
+	err = toml.unparse_to_writer(writer, &zero_doc, &options)
+	configuration, ok = err.(toml.Unparse_Configuration_Error)
+	testing.expect(t, ok)
+	if ok {
+		testing.expect_value(t, configuration, toml.Unparse_Configuration_Error.Invalid_Max_Depth)
+	}
+	testing.expect_value(t, state.write_count, 0)
+
+	options.max_depth = 2
+	test_support.scripted_writer_init(&state, nil, calls[:], bytes[:])
+	err = toml.unparse_to_writer(writer, &valid, &options)
+	_ = unparse_limit_diagnostic(t, err, .Maximum_Depth_Exceeded)
+	testing.expect_value(t, state.write_count, 0)
+
+	original := valid.root[0].value
+	reflect.set_union_variant_raw_tag(valid.root[0].value, 255)
+	options = {}
+	test_support.scripted_writer_init(&state, nil, calls[:], bytes[:])
+	err = toml.unparse_to_writer(writer, &valid, &options)
+	_ = unparse_data_diagnostic(t, err, .Invalid_Value_State)
+	testing.expect_value(t, state.write_count, 0)
+	valid.root[0].value = original
+
+	byte_storage: byte
+	raw := runtime.Raw_Dynamic_Array{
+		data = &byte_storage,
+		len = 0,
+		cap = max(int),
+		allocator = context.allocator,
+	}
+	overflow := toml.Document{
+		root = transmute(toml.Table)raw,
+		allocator = context.allocator,
+	}
+	test_support.scripted_writer_init(&state, nil, calls[:], bytes[:])
+	err = toml.unparse_to_writer(writer, &overflow, &options)
+	_ = unparse_limit_diagnostic(t, err, .Size_Overflow)
+	testing.expect_value(t, state.write_count, 0)
+}
+
+@(test)
+test_unparse_to_writer_cleans_every_preflight_allocation_failure_before_output :: proc(t: ^testing.T) {
+	doc, parse_error := toml.parse_string(`a = "one"
+b = ["two", { c = "three" }]
+`)
+	assert(parse_error == nil)
+	defer toml.destroy_document(&doc)
+	backing := context.allocator
+	options: toml.Marshal_Options
+
+	success_events: [256]test_support.Allocator_Event
+	success_live: [64]test_support.Live_Allocation
+	success: test_support.Observed_Allocator
+	test_support.observed_allocator_init(&success, backing, success_events[:], success_live[:])
+	calls: [128]test_support.Scripted_Writer_Call
+	bytes: [1024]byte
+	writer_state: test_support.Scripted_Writer
+	test_support.scripted_writer_init(&writer_state, nil, calls[:], bytes[:])
+	rejecting_success: test_support.Rejecting_Allocator
+	context.allocator = test_support.rejecting_allocator(&rejecting_success)
+	err := toml.unparse_to_writer(
+		test_support.scripted_writer(&writer_state),
+		&doc,
+		&options,
+		test_support.observed_allocator(&success),
+	)
+	context.allocator = backing
+	assert(err == nil)
+	assert(success.allocation_request_count > 0)
+	testing.expect_value(t, rejecting_success.call_count, 0)
+	testing.expect_value(t, success.live_count, 0)
+	allocation_count := success.allocation_request_count
+
+	for fail_at in 1..=allocation_count {
+		events: [256]test_support.Allocator_Event
+		live: [64]test_support.Live_Allocation
+		observed: test_support.Observed_Allocator
+		test_support.observed_allocator_init(&observed, backing, events[:], live[:])
+		observed.fail_at_allocation = fail_at
+		observed.failure_error = .Out_Of_Memory
+		test_support.scripted_writer_init(&writer_state, nil, calls[:], bytes[:])
+		rejecting: test_support.Rejecting_Allocator
+		context.allocator = test_support.rejecting_allocator(&rejecting)
+		err = toml.unparse_to_writer(
+			test_support.scripted_writer(&writer_state),
+			&doc,
+			&options,
+			test_support.observed_allocator(&observed),
+		)
+		context.allocator = backing
+		allocator_error, ok := err.(runtime.Allocator_Error)
+		testing.expect(t, ok)
+		if ok {
+			testing.expect_value(t, allocator_error, runtime.Allocator_Error.Out_Of_Memory)
+		}
+		testing.expect_value(t, writer_state.write_count, 0)
+		testing.expect_value(t, observed.live_count, 0)
+		testing.expect_value(t, observed.foreign_release_count, 0)
+		testing.expect_value(t, rejecting.call_count, 0)
+	}
+
+	events: [256]test_support.Allocator_Event
+	live: [64]test_support.Live_Allocation
+	observed: test_support.Observed_Allocator
+	test_support.observed_allocator_init(&observed, backing, events[:], live[:])
+	observed.fail_at_allocation = allocation_count
+	observed.failure_error = .Invalid_Argument
+	test_support.scripted_writer_init(&writer_state, nil, calls[:], bytes[:])
+	err = toml.unparse_to_writer(
+		test_support.scripted_writer(&writer_state),
+		&doc,
+		&options,
+		test_support.observed_allocator(&observed),
+	)
+	allocator_error, ok := err.(runtime.Allocator_Error)
+	testing.expect(t, ok)
+	if ok {
+		testing.expect_value(t, allocator_error, runtime.Allocator_Error.Invalid_Argument)
+	}
+	testing.expect_value(t, writer_state.write_count, 0)
+	testing.expect_value(t, observed.live_count, 0)
+}
+
+@(test)
+test_unparse_to_writer_cleans_external_lifetime_scratch_after_io_failure :: proc(t: ^testing.T) {
+	doc, parse_error := toml.parse_string(`a = "one"
+b = ["two", { c = "three" }]
+`)
+	assert(parse_error == nil)
+	defer toml.destroy_document(&doc)
+	options: toml.Marshal_Options
+
+	reporting_modes := [?]bool{true, false}
+	for report_features in reporting_modes {
+		buffer: [64*1024]byte
+		arena: mem.Arena
+		mem.arena_init(&arena, buffer[:])
+		external: test_support.External_Lifetime_Allocator
+		test_support.external_lifetime_allocator_init(
+			&external,
+			mem.arena_allocator(&arena),
+			report_features,
+		)
+		steps := [?]test_support.Scripted_Write{{
+			count_kind = .Exact,
+			count = 1,
+			error = .Permission_Denied,
+		}}
+		calls: [16]test_support.Scripted_Writer_Call
+		bytes: [128]byte
+		state: test_support.Scripted_Writer
+		test_support.scripted_writer_init(&state, steps[:], calls[:], bytes[:])
+		err := toml.unparse_to_writer(
+			test_support.scripted_writer(&state),
+			&doc,
+			&options,
+			test_support.external_lifetime_allocator(&external),
+		)
+		writer_error, ok := err.(io.Error)
+		testing.expect(t, ok)
+		if ok {
+			testing.expect_value(t, writer_error, io.Error.Permission_Denied)
+		}
+		testing.expect_value(t, state.write_count, 1)
+		testing.expect(t, external.allocation_request_count > 0)
+		if report_features {
+			testing.expect_value(t, external.release_attempt_count, 0)
+		} else {
+			testing.expect_value(t, external.release_attempt_count, 1)
+		}
+		mem.arena_free_all(&arena)
+	}
 }
 
 @(test)

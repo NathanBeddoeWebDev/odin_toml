@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "provenance": {
+    "source": "https://github.com/toml-lang/toml-test.git",
+    "tag": "v2.2.0",
+    "revision": "ce08da1ddb075d1c7596d663c7fcba9a2ae02c5c",
+    "license": "MIT",
+    "odin": "dev-2026-07:2c25fb924",
+    "platform": "darwin_arm64"
+  },
+  "command": [
+    "build/tools/toml-test",
+    "test",
+    "-toml=1.1.0",
+    "-decoder=./build/tools/toml-test-decoder",
+    "-timeout=5s",
+    "-parallel=4",
+    "-color=never",
+    "-json"
+  ],
+  "result": {
+    "version": "toml-test v2.2.0",
+    "toml": "1.1.0",
+    "flags": [
+      "build/tools/toml-test",
+      "test",
+      "-toml=1.1.0",
+      "-decoder=./build/tools/toml-test-decoder",
+      "-timeout=5s",
+      "-parallel=4",
+      "-color=never",
+      "-json"
+    ],
+    "decoder": [
+      "./build/tools/toml-test-decoder"
+    ],
+    "encoder": null,
+    "passed_valid": 214,
+    "passed_encoder": 0,
+    "passed_invalid": 467,
+    "failed_valid": 0,
+    "failed_encoder": 0,
+    "failed_invalid": 0,
+    "skipped": 0,
+    "tests": []
+  }
+}

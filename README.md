@@ -60,3 +60,11 @@ scripts/prepare_test_dependencies.sh
 ```
 
 All generated sources and tools stay under ignored `build/`. Neither source is vendored, imported, linked, or otherwise used by the runtime packages.
+
+Run the pinned official TOML 1.1 decoder gate with:
+
+```sh
+scripts/check_toml_test_decoder.sh
+```
+
+The gate builds the test-only public-API adapter, invokes the official runner with literal `-toml=1.1.0`, and rejects any valid failure, invalid failure, or skip. The reviewed machine-readable result and its compiler/platform provenance are preserved in [`tests/corpus/toml-test-decoder-report.json`](tests/corpus/toml-test-decoder-report.json).

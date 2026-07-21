@@ -623,6 +623,117 @@ run_stateful_allocation_sweep :: proc(t: ^testing.T, input: string, use_bytes: b
 }
 
 @(test)
+test_official_decoder_regressions_reject_dotted_extension_of_explicit_tables_and_arrays_of_tables :: proc(t: ^testing.T) {
+	cases := [?]struct {
+		input:         string,
+		kind:          toml.Parse_Definition_Error_Kind,
+		existing:      toml.Parse_Definition_Form,
+		primary_start: int,
+		primary_end:   int,
+		related_end:   int,
+		path:          [4]string,
+		path_count:    int,
+	}{
+		{
+			"[[tab.arr]]\n[tab]\narr.val1=1\n",
+			.Array_Of_Tables_Conflict,
+			.Array_Of_Tables,
+			18, 21, 11,
+			{"tab", "arr", "", ""},
+			2,
+		},
+		{
+			"[a.b.c]\nz=9\n[a]\nb.c.t=\"x\"\n",
+			.Table_Redefined,
+			.Standard_Table,
+			18, 19, 7,
+			{"a", "b", "c", ""},
+			3,
+		},
+		{
+			"[a.b.c.d]\nz=9\n[a]\nb.c.d.k.t=\"x\"\n",
+			.Table_Redefined,
+			.Standard_Table,
+			22, 23, 9,
+			{"a", "b", "c", "d"},
+			4,
+		},
+		{
+			"[[a.b]]\n[a]\nb.y=2\n",
+			.Array_Of_Tables_Conflict,
+			.Array_Of_Tables,
+			12, 13, 7,
+			{"a", "b", "", ""},
+			2,
+		},
+		{
+			"[a.b.c]\nz=9\n[[unrelated]]\nx=1\n[a]\nb.c.t=\"x\"\n",
+			.Table_Redefined,
+			.Standard_Table,
+			36, 37, 7,
+			{"a", "b", "c", ""},
+			3,
+		},
+	}
+	for test_case in cases {
+		doc, err := toml.parse_string(test_case.input)
+		testing.expect(t, document_is_zero(doc))
+		if err == nil {
+			toml.destroy_document(&doc)
+		}
+		diagnostic, ok := parse_diagnostic_from(err)
+		testing.expect(t, ok)
+		if !ok {
+			continue
+		}
+		definition, definition_ok := diagnostic.detail.(toml.Parse_Definition_Error)
+		testing.expect(t, definition_ok)
+		if !definition_ok {
+			continue
+		}
+		testing.expect_value(t, definition.kind, test_case.kind)
+		testing.expect_value(t, definition.existing, test_case.existing)
+		testing.expect_value(t, definition.attempted, toml.Parse_Definition_Form.Dotted_Table)
+		testing.expect_value(t, diagnostic.primary, toml.Source_Range{
+			ascii_source_position(test_case.input, test_case.primary_start),
+			ascii_source_position(test_case.input, test_case.primary_end),
+		})
+		testing.expect(t, diagnostic.related.ok)
+		testing.expect_value(t, diagnostic.related.value, toml.Source_Range{
+			ascii_source_position(test_case.input, 0),
+			ascii_source_position(test_case.input, test_case.related_end),
+		})
+		testing.expect_value(t, diagnostic.path.segment_count, u8(test_case.path_count))
+		testing.expect_value(t, diagnostic.path.prefix_count, u8(test_case.path_count))
+		testing.expect_value(t, diagnostic.path.total_segment_count, u16(test_case.path_count))
+		testing.expect_value(t, diagnostic.path.omitted_segment_count, u16(0))
+		testing.expect(t, !diagnostic.path.truncated)
+		for index in 0..<test_case.path_count {
+			key, key_ok := diagnostic.path.segments[index].(toml.Parse_Diagnostic_Key)
+			testing.expect(t, key_ok)
+			if key_ok {
+				testing.expect_value(t, string(key.bytes[:key.prefix_length]), test_case.path[index])
+			}
+		}
+	}
+
+	valid_neighbors := [?]string{
+		"[[tab.arr]]\nval1=1\n",
+		"[a.b.c]\nz=9\nt=\"x\"\n",
+		"[a]\nb.c.d.k.t=\"x\"\n",
+		"[[a.b]]\ny=2\n",
+		"[a.b.c]\nz=9\n[[unrelated]]\nx=1\n[a.b.c.extra]\nt=\"x\"\n",
+	}
+	for input in valid_neighbors {
+		doc, err := toml.parse_string(input)
+		testing.expect(t, err == nil)
+		if err == nil {
+			toml.destroy_document(&doc)
+		}
+	}
+}
+
+@(test)
 test_stateful_parse_allocation_failure_is_transactional_at_every_ordinal :: proc(t: ^testing.T) {
 	input := `root.dotted = "owned"
 [root.child]

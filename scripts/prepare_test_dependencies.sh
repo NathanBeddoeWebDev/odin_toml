@@ -11,14 +11,22 @@ read_lock() {
 
 checkout_pin() {
   local source=$1 revision=$2 destination=$3
+  # A prior partial clone is replaced so every source blob from the pinned
+  # revision is present locally before a test-only tool is built.
+  if [[ -d "$destination/.git" ]] &&
+     [[ "$(git -C "$destination" config --bool remote.origin.promisor || true)" == true ]]; then
+    rm -rf "$destination"
+  fi
   if [[ -d "$destination/.git" ]]; then
     git -C "$destination" fetch --depth=1 origin "$revision"
   else
-    git clone --filter=blob:none --no-checkout "$source" "$destination"
+    git clone --no-checkout "$source" "$destination"
     git -C "$destination" fetch --depth=1 origin "$revision"
   fi
   git -C "$destination" checkout --detach "$revision"
   test "$(git -C "$destination" rev-parse HEAD)" = "$revision"
+  test -z "$(git -C "$destination" status --porcelain)"
+  git -C "$destination" fsck --full --no-dangling
 }
 
 mkdir -p build/deps build/tools

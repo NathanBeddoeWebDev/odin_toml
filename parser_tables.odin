@@ -336,9 +336,31 @@ parser_descend_child :: proc(
 ) -> (int, Parse_Error) {
 	node := state.nodes[node_id-1]
 	switch node.form {
-	case .Implicit_Table, .Standard_Table, .Dotted_Table, .Array_Of_Tables_Element:
+	case .Implicit_Table, .Dotted_Table, .Array_Of_Tables_Element:
+		return node_id, nil
+	case .Standard_Table:
+		if attempted == .Dotted_Table {
+			return 0, parser_definition_diagnostic(
+				state,
+				.Table_Redefined,
+				node.form,
+				attempted,
+				key_range,
+				node.definition_range,
+			)
+		}
 		return node_id, nil
 	case .Array_Of_Tables:
+		if attempted == .Dotted_Table {
+			return 0, parser_definition_diagnostic(
+				state,
+				.Array_Of_Tables_Conflict,
+				node.form,
+				attempted,
+				key_range,
+				parser_node_related_range(state, node_id),
+			)
+		}
 		assert(node.latest_element_id != 0)
 		latest := node.latest_element_id
 		latest_index := state.nodes[latest-1].semantic_index

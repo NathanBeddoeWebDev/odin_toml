@@ -314,6 +314,27 @@ test_clone_failure_is_transactional_at_every_allocation_ordinal :: proc(t: ^test
 		testing.expect_value(t, unchanged_text, "source")
 	}
 
+	beyond_events: [256]test_support.Allocator_Event
+	beyond_live: [64]test_support.Live_Allocation
+	beyond_state: test_support.Observed_Allocator
+	test_support.observed_allocator_init(
+		&beyond_state,
+		backing,
+		beyond_events[:],
+		beyond_live[:],
+	)
+	beyond_state.fail_at_allocation = allocation_count + 1
+	beyond_allocator := test_support.observed_allocator(&beyond_state)
+	rejecting: test_support.Rejecting_Allocator
+	context.allocator = test_support.rejecting_allocator(&rejecting)
+	beyond_clone, beyond_error := toml.clone_document(&source, beyond_allocator)
+	context.allocator = backing
+	testing.expect(t, beyond_error == nil)
+	testing.expect_value(t, len(beyond_clone.root), len(source.root))
+	testing.expect_value(t, rejecting.call_count, 0)
+	toml.destroy_document(&beyond_clone)
+	testing.expect_value(t, beyond_state.live_count, 0)
+
 	baseline_value_events: [64]test_support.Allocator_Event
 	baseline_value_live: [16]test_support.Live_Allocation
 	baseline_value_state: test_support.Observed_Allocator
@@ -351,6 +372,25 @@ test_clone_failure_is_transactional_at_every_allocation_ordinal :: proc(t: ^test
 		testing.expect_value(t, state.live_count, 0)
 		testing.expect_value(t, state.foreign_release_count, 0)
 	}
+
+	beyond_value_events: [64]test_support.Allocator_Event
+	beyond_value_live: [16]test_support.Live_Allocation
+	beyond_value_state: test_support.Observed_Allocator
+	test_support.observed_allocator_init(
+		&beyond_value_state,
+		backing,
+		beyond_value_events[:],
+		beyond_value_live[:],
+	)
+	beyond_value_state.fail_at_allocation = value_allocation_count + 1
+	beyond_value_allocator := test_support.observed_allocator(&beyond_value_state)
+	beyond_value, beyond_value_error := toml.clone_value(
+		&source.root[9].value,
+		beyond_value_allocator,
+	)
+	testing.expect(t, beyond_value_error == nil)
+	toml.destroy_value(&beyond_value, beyond_value_allocator)
+	testing.expect_value(t, beyond_value_state.live_count, 0)
 }
 
 @(test)
@@ -381,6 +421,7 @@ test_external_lifetime_clones_are_logically_destroyed_without_free_all :: proc(t
 	standalone, standalone_error := toml.clone_value(&source.root[9].value, unreported_allocator)
 	testing.expect(t, standalone_error == nil)
 	testing.expect(t, arena.offset > 0)
+	release_attempts_before_destroy := unreported.release_attempt_count
 	toml.destroy_value(&standalone, unreported_allocator)
 	query_count := unreported.query_features_count
 	toml.destroy_value(&standalone, unreported_allocator)
@@ -388,7 +429,11 @@ test_external_lifetime_clones_are_logically_destroyed_without_free_all :: proc(t
 	testing.expect(t, zero_string_ok)
 	testing.expect_value(t, zero_string, "")
 	testing.expect_value(t, unreported.query_features_count, query_count)
-	testing.expect_value(t, unreported.release_attempt_count, 1)
+	testing.expect_value(
+		t,
+		unreported.release_attempt_count,
+		release_attempts_before_destroy + 1,
+	)
 	testing.expect_value(t, unreported.free_all_count, 0)
 	mem.arena_free_all(&arena)
 }

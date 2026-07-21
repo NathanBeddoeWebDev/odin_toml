@@ -4,12 +4,12 @@
 
 **Blocked by:** 02 — Adversarial test kit; 08 — Semantic owner lifecycle.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Validation detects invalid text, temporals, containers, duplicate keys, cycles, aliases, allocator mismatches, and excessive local depth with exact structured errors.
-- [ ] `set` deep-clones caller input through the table owner and never aliases caller ownership.
-- [ ] Replacement preserves entry position; new insertion appends; removal destroys the removed owner and stably compacts entries.
-- [ ] Failed insertion or replacement leaves the table physically and semantically unchanged and cleans all temporary ownership.
-- [ ] Local depth 256 succeeds and 257 fails before commit; a locally valid nested mutation may still be rejected by a later stricter root-relative operation.
-- [ ] Structural mutation invalidates documented borrows and remove/reinsert produces append order.
-- [ ] Allocation-ordinal sweeps, rejecting ambient allocation, and malformed caller values exercise all public mutation results.
+- [x] Validation detects invalid text, temporals, containers, duplicate keys, cycles, aliases, allocator mismatches, and excessive local depth with exact structured errors.
+- [x] `set` deep-clones caller input through the table owner and never aliases caller ownership.
+- [x] Replacement preserves entry position; new insertion appends; removal destroys the removed owner and stably compacts entries.
+- [x] Failed insertion or replacement leaves the table physically and semantically unchanged and cleans all temporary ownership.
+- [x] Local depth 256 succeeds and 257 fails before commit; a locally valid nested mutation may still be rejected by a later stricter root-relative operation.
+- [x] Structural mutation invalidates documented borrows and remove/reinsert produces append order.
+- [x] Allocation-ordinal sweeps, rejecting ambient allocation, and malformed caller values exercise all public mutation results.

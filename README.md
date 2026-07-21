@@ -15,6 +15,8 @@ This repository is being implemented in dependency-ordered tickets. Public decla
 
 Successful parse and clone calls return owners. `get` returns only a borrowed pointer: do not destroy it, and do not retain it across structural mutation or destruction of its containing table. A successful `clone_value` creates an independent standalone owner.
 
+`set` borrows and validates its key and value, deep-clones committed ownership through the target table's retained allocator, preserves replacement position, and appends new keys. It rejects zero tables and malformed text, temporals, containers, duplicates, cycles, ownership aliases, allocator mismatches, and local paths deeper than 256 without changing the table. `remove` requires a valid acyclic, exclusively owned, allocator-consistent table; it destroys the removed owner and stably compacts the table, so removing and reinserting a key appends it. Any successful structural mutation invalidates all value pointers borrowed from that table.
+
 - Release a `Document` with `destroy_document`.
 - Release a standalone cloned `Value` with `destroy_value` and the same allocator used to clone it.
 - Both destroy operations zero the supplied owner and are idempotent.

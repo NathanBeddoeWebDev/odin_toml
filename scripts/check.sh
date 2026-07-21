@@ -37,4 +37,7 @@ for mode in minimal speed; do
   odin build tests/consumer_typed "-o:$mode" "${common[@]}" -out:"$work/typed-$mode"
 done
 
-printf 'all normal and optimized scaffold checks passed\n'
+scripts/probe_rtti.sh
+scripts/probe_no_rtti.sh
+
+printf 'all normal and optimized scaffold checks and feasibility probes passed\n'

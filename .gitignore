@@ -1,1 +1,4 @@
 .pi-subagents
+/build/
+__pycache__/
+*.pyc

@@ -1,0 +1,7 @@
+source = "https://github.com/toml-lang/toml-test.git"
+tag = "v2.2.0"
+revision = "ce08da1ddb075d1c7596d663c7fcba9a2ae02c5c"
+toml_version = "1.1.0"
+license = "MIT"
+license_file = "toml-test.LICENSE"
+runtime_dependency = false

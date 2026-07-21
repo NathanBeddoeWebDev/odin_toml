@@ -1,0 +1,31 @@
+name: scaffold
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  declarations:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Build pinned Reference Odin
+        shell: bash
+        run: |
+          set -euo pipefail
+          revision=$(awk -F'"' '/^revision = / {print $2}' toolchain/odin.lock)
+          source=$(awk -F'"' '/^source = / {print $2}' toolchain/odin.lock)
+          git clone --filter=blob:none "$source" "$RUNNER_TEMP/Odin"
+          git -C "$RUNNER_TEMP/Odin" fetch --depth=1 origin "$revision"
+          git -C "$RUNNER_TEMP/Odin" checkout --detach "$revision"
+          (cd "$RUNNER_TEMP/Odin" && ./build_odin.sh release-native)
+          echo "$RUNNER_TEMP/Odin" >> "$GITHUB_PATH"
+      - name: Prepare pinned test-only dependencies
+        run: scripts/prepare_test_dependencies.sh
+      - name: Compile public packages and external consumers
+        run: scripts/check.sh
+      - name: Reproduce open RTTI-disabled design gate
+        run: scripts/probe_no_rtti.sh
+      - name: Print compiler environment
+        if: always()
+        run: test ! -f build/reports/compiler.txt || cat build/reports/compiler.txt

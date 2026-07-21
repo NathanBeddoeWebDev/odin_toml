@@ -1,0 +1,5 @@
+source = "https://github.com/ulfjack/ryu.git"
+revision = "4c0618b0e44f7ef027ebae05d2cc7812048f7c8f"
+licenses = ["Apache-2.0", "BSL-1.0"]
+license_files = ["ryu.LICENSE-Apache2", "ryu.LICENSE-Boost"]
+runtime_dependency = false

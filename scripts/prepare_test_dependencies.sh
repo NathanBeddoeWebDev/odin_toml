@@ -39,5 +39,9 @@ ryu_revision=$(read_lock "$ryu_lock" revision)
 checkout_pin "$ryu_source" "$ryu_revision" build/deps/ryu
 cmp tests/oracle/ryu.LICENSE-Apache2 build/deps/ryu/LICENSE-Apache2
 cmp tests/oracle/ryu.LICENSE-Boost build/deps/ryu/LICENSE-Boost
+"${CC:-cc}" -std=c11 -O2 -Wall -Wextra -Werror \
+  -I build/deps/ryu \
+  build/deps/ryu/ryu/d2s.c tests/oracle/float_format_oracle.c \
+  -o build/tools/float-format-oracle
 
 printf 'prepared pinned test-only dependencies under build/\n'

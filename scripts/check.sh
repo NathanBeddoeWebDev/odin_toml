@@ -22,6 +22,9 @@ scripts/check_public_api.py
 common=(-vet -vet-style -warnings-as-errors)
 odin check . -no-entry-point "${common[@]}"
 odin check temporal -no-entry-point "${common[@]}"
+for target in linux_amd64 linux_arm64 darwin_amd64 darwin_arm64 windows_amd64; do
+  odin check . -no-entry-point "-target:$target" "${common[@]}"
+done
 
 for mode in minimal speed; do
   odin test tests/support "-o:$mode" "${common[@]}" \
@@ -37,7 +40,15 @@ for mode in minimal speed; do
     -define:ODIN_TEST_THREADS=1 \
     -define:ODIN_TEST_RANDOM_SEED=123456789 \
     -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true
+  odin test tests/float_format "-o:$mode" "${common[@]}" \
+    -define:TOML_BINARY64_FORMAT_GATE_TESTING=true \
+    -define:TOML_DECIMAL_GATE_TESTING=true \
+    -define:ODIN_TEST_THREADS=1 \
+    -define:ODIN_TEST_RANDOM_SEED=123456789 \
+    -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true
 done
+
+scripts/check_float_format_oracle.sh
 
 for zone in UTC Pacific/Kiritimati America/Los_Angeles; do
   TZ="$zone" odin test tests/temporal -o:minimal "${common[@]}" \

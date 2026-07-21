@@ -40,6 +40,10 @@ for mode in minimal speed; do
     -define:ODIN_TEST_THREADS=1 \
     -define:ODIN_TEST_RANDOM_SEED=123456789 \
     -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true
+  odin test tests/semantic_lifecycle "-o:$mode" "${common[@]}" \
+    -define:ODIN_TEST_THREADS=1 \
+    -define:ODIN_TEST_RANDOM_SEED=123456789 \
+    -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true
   odin test tests/float_parse "-o:$mode" "${common[@]}" \
     -define:TOML_DECIMAL_GATE_TESTING=true \
     -define:ODIN_TEST_THREADS=1 \
@@ -67,6 +71,8 @@ trap 'rm -rf "$work"' EXIT
 for mode in minimal speed; do
   odin build tests/consumer_semantic "-o:$mode" "${common[@]}" -out:"$work/semantic-$mode"
   odin build tests/consumer_typed "-o:$mode" "${common[@]}" -out:"$work/typed-$mode"
+  odin build examples/semantic_lifecycle "-o:$mode" "${common[@]}" -out:"$work/semantic-lifecycle-$mode"
+  "$work/semantic-lifecycle-$mode"
 done
 
 scripts/probe_rtti.sh

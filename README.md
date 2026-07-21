@@ -2,7 +2,7 @@
 
 Standalone Odin packages for strict TOML 1.1 documents and allocation-free temporal values.
 
-This repository is being implemented in dependency-ordered tickets. The current scaffold freezes the approved public declarations; procedure bodies are intentionally not implemented until their owning tickets and will call `unimplemented` if executed.
+This repository is being implemented in dependency-ordered tickets. Public declarations are frozen; procedures whose implementation tickets have not landed yet intentionally call `unimplemented` if executed.
 
 ## Packages
 
@@ -10,6 +10,17 @@ This repository is being implemented in dependency-ordered tickets. The current 
 - [`temporal/`](temporal): package `temporal`
 
 `toml` imports `temporal`; `temporal` does not import `toml`. External consumers can use a relative import or map the repository into an Odin collection.
+
+## Semantic ownership
+
+Successful parse and clone calls return owners. `get` returns only a borrowed pointer: do not destroy it, and do not retain it across structural mutation or destruction of its containing table. A successful `clone_value` creates an independent standalone owner.
+
+- Release a `Document` with `destroy_document`.
+- Release a standalone cloned `Value` with `destroy_value` and the same allocator used to clone it.
+- Both destroy operations zero the supplied owner and are idempotent.
+- With an external-lifetime allocator, destruction ends logical ownership; reclaim physical storage through that allocator's lifetime.
+
+The executable [`examples/semantic_lifecycle`](examples/semantic_lifecycle/main.odin) demonstrates an initialized empty document and the difference between a borrowed `get` result and an owned deep clone.
 
 ## Reproducible checks
 

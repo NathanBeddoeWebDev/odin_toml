@@ -4,11 +4,11 @@
 
 **Blocked by:** 01 — Reproducible scaffold and frozen declarations.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Tracking and fail-at-N allocators account for allocation, nonzero allocation, resize, nonzero resize, release, and foreign-release attempts by ordinal.
-- [ ] A rejecting ambient allocator proves that tested package operations use only their selected allocator.
-- [ ] Feature-reporting and unsupported-mode external-lifetime allocators model logical destruction without unsupported individual frees.
-- [ ] A scripted writer can produce every valid and invalid byte-count/error combination and records each call exactly once.
-- [ ] Deterministic random helpers report replayable seeds and reproduce generated sequences exactly.
-- [ ] The support utilities pass focused self-tests and remain test-only rather than expanding either public package.
+- [x] Tracking and fail-at-N allocators account for allocation, nonzero allocation, resize, nonzero resize, release, and foreign-release attempts by ordinal.
+- [x] A rejecting ambient allocator proves that tested package operations use only their selected allocator.
+- [x] Feature-reporting and unsupported-mode external-lifetime allocators model logical destruction without unsupported individual frees.
+- [x] A scripted writer can produce every valid and invalid byte-count/error combination and records each call exactly once.
+- [x] Deterministic random helpers report replayable seeds and reproduce generated sequences exactly.
+- [x] The support utilities pass focused self-tests and remain test-only rather than expanding either public package.

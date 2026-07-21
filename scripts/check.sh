@@ -23,6 +23,13 @@ common=(-vet -vet-style -warnings-as-errors)
 odin check . -no-entry-point "${common[@]}"
 odin check temporal -no-entry-point "${common[@]}"
 
+for mode in minimal speed; do
+  odin test tests/support "-o:$mode" "${common[@]}" \
+    -define:ODIN_TEST_THREADS=1 \
+    -define:ODIN_TEST_RANDOM_SEED=123456789 \
+    -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true
+done
+
 work=$(mktemp -d "${TMPDIR:-/tmp}/odin-toml-check.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 for mode in minimal speed; do

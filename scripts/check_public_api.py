@@ -88,7 +88,15 @@ def check_require_results(package: str, package_dir: Path) -> list[str]:
 
 def check_runtime_dependencies() -> list[str]:
     failures = []
-    forbidden = ("foreign import", "toml-test", "ulfjack", "ryu", "tests/oracle", "tests/corpus")
+    forbidden = (
+        "foreign import",
+        "toml-test",
+        "ulfjack",
+        "ryu",
+        "tests/oracle",
+        "tests/corpus",
+        "tests/support",
+    )
     for package_dir, _ in PACKAGES.values():
         for path in sorted(package_dir.glob("*.odin")):
             lowered = path.read_text().lower()

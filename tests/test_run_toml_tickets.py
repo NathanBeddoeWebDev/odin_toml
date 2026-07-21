@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -202,6 +203,127 @@ class GitInvariantTests(unittest.TestCase):
                     tickets_before=before,
                     tickets_after=after,
                 )
+
+
+class CliIntegrationTests(unittest.TestCase):
+    def test_one_ticket_run_uses_fresh_skill_session_and_commits_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            git(repo, "init")
+            git(repo, "config", "user.email", "runner@example.com")
+            git(repo, "config", "user.name", "Runner Test")
+            issue_dir = repo / ".scratch" / "toml-package-implementation" / "issues"
+            issue_dir.mkdir(parents=True)
+            ticket_path = issue_dir / "01-one.md"
+            ticket_path.write_text(
+                "# 01 — One\\n\\n**What to build:** One.\\n\\n**Blocked by:** None — can start immediately.\\n\\n"
+                "**Status:** ready-for-agent\\n\\n- [ ] criterion\\n"
+            )
+            (repo / ".scratch" / "toml-package-implementation" / "spec.md").write_text("spec\\n")
+            design = repo / ".scratch" / "toml-package-design"
+            design.mkdir(parents=True)
+            (design / "spec.md").write_text("design\\n")
+            (design / "public-interface-freeze.md").write_text("freeze\\n")
+            git(repo, "add", ".")
+            git(repo, "commit", "-m", "baseline")
+
+            fake_pi = repo / "fake-pi"
+            fake_pi.write_text(fake_pi_source())
+            fake_pi.chmod(0o755)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts" / "run_toml_tickets.py"),
+                    str(issue_dir),
+                    "--prompt",
+                    str(PROMPT),
+                    "--expected-count",
+                    "1",
+                    "--max-tickets",
+                    "1",
+                    "--pi-bin",
+                    str(fake_pi),
+                ],
+                cwd=repo,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("Completed and committed ticket 01", result.stdout)
+            self.assertIn("**Status:** resolved", ticket_path.read_text())
+            self.assertNotIn("- [ ]", ticket_path.read_text())
+            self.assertEqual(git(repo, "rev-list", "--count", "HEAD").strip(), "2")
+            state = json.loads((repo / ".git" / "pi-ticket-runner" / "state.json").read_text())
+            self.assertEqual(state["completed"][0]["ticket"], "01")
+            self.assertIsNone(state["active"])
+
+
+def fake_pi_source() -> str:
+    return textwrap.dedent(
+        r'''#!/usr/bin/env python3
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+args = sys.argv[1:]
+if "--version" in args:
+    print("fake-pi 1.0")
+    raise SystemExit(0)
+prompt = args[-1]
+assert prompt.startswith("/skill:implement ")
+session_dir = Path(args[args.index("--session-dir") + 1])
+session_dir.mkdir(parents=True, exist_ok=True)
+
+def field(pattern):
+    match = re.search(pattern, prompt)
+    assert match, pattern
+    return match.group(1).strip()
+
+ticket_id = field(r"Implement ticket (\\d{2}) —")
+title = field(r"Implement ticket \\d{2} — (.+) at:")
+ticket_path = Path(field(r"at:\\n(.+)\\n\\nRun identity:"))
+nonce = field(r"- nonce: (.+)")
+base = field(r"- fixed review/base commit: ([0-9a-f]+)")
+receipt_path = Path(field(r"- machine-readable receipt: (.+)"))
+text = ticket_path.read_text().replace("**Status:** ready-for-agent", "**Status:** resolved").replace("- [ ]", "- [x]")
+ticket_path.write_text(text)
+Path("implementation.txt").write_text("done\\n")
+subprocess.run(["git", "add", "."], check=True)
+subprocess.run(["git", "commit", "-m", f"ticket {ticket_id}: {title}"], check=True, stdout=subprocess.DEVNULL)
+final = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+receipt = {
+    "version": 1,
+    "ticket": ticket_id,
+    "nonce": nonce,
+    "base_commit": base,
+    "final_commit": final,
+    "result": "complete",
+    "plan": ["plan"],
+    "tdd_cycles": [{"test": "test", "red": "red", "green": "green"}],
+    "focused_tests": [{"command": "focused", "result": "passed"}],
+    "full_tests": [{"command": "full", "result": "passed"}],
+    "precommit_review": {"status": "passed", "findings": [], "fixes": []},
+    "code_review": {
+        "standards": {"status": "passed", "findings": []},
+        "spec": {"status": "passed", "findings": []},
+    },
+    "final_tests": [{"command": "final", "result": "passed"}],
+    "unresolved_blockers": [],
+}
+receipt_path.write_text(json.dumps(receipt))
+session = session_dir / "session.jsonl"
+session.write_text(
+    json.dumps({"type": "session", "version": 3}) + "\\n" +
+    json.dumps({"type": "message", "message": {"role": "user", "content": [{"type": "text", "text": f'<skill name="implement" location="/skill">body</skill>\\n{nonce}'}]}}) + "\\n"
+)
+print(json.dumps({"type": "session", "version": 3}))
+print(json.dumps({"type": "message_end", "message": {"role": "assistant", "content": [{"type": "text", "text": "done\\nTICKET_RESULT: COMPLETE"}]}}))
+print(json.dumps({"type": "agent_end", "messages": []}))
+'''
+    )
 
 
 def valid_receipt() -> dict:

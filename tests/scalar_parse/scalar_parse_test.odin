@@ -378,7 +378,6 @@ test_lexical_and_grammar_diagnostics_remain_distinct :: proc(t: ^testing.T) {
 		{"value\n", .Equals, .End_Of_Line, 5, 5},
 		{"value =\n", .Value, .End_Of_Line, 7, 8},
 		{"value = 1 trailing\n", .Expression_End, .Other, 10, 11},
-		{"value.other = 1\n", .Equals, .Dot, 5, 5},
 	}
 	for test_case in grammar_cases {
 		doc, err := toml.parse_string(test_case.input)

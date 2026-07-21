@@ -15,8 +15,10 @@ Parser_State :: struct {
 	input:     string,
 	allocator: runtime.Allocator,
 	gate:      Allocator_Release_Gate,
-	root:      Table,
-	ranges:    []Source_Range,
+	root:         Table,
+	nodes:        Parser_Node_Array,
+	active_table: int,
+	active_path:  Parser_Path_Stack,
 	max_depth:      int,
 	container_path:  Parser_Path_Stack,
 	container_error: Parse_Error,
@@ -777,133 +779,6 @@ parser_make_table :: proc(
 }
 
 @(private)
-parser_make_ranges :: proc(
-	state: ^Parser_State,
-	count: int,
-	start, end: int,
-	path: Parse_Diagnostic_Path,
-) -> ([]Source_Range, Parse_Error) {
-	if count < 0 || count > max(int)/size_of(Source_Range) {
-		return nil, parse_limit_error(state, .Size_Overflow, start, end, path)
-	}
-	if count == 0 {
-		return nil, nil
-	}
-	memory, allocation_error := allocator_allocate(
-		count*size_of(Source_Range),
-		state.allocator,
-		true,
-		state.loc,
-	)
-	if allocation_error != nil {
-		return nil, allocation_error
-	}
-	if memory == nil {
-		return nil, runtime.Allocator_Error.Out_Of_Memory
-	}
-	return transmute([]Source_Range)runtime.Raw_Slice{memory, count}, nil
-}
-
-@(private)
-parser_release_ranges :: proc(state: ^Parser_State, ranges: ^[]Source_Range) {
-	if ranges == nil || raw_data(ranges^) == nil {
-		return
-	}
-	release_owned_memory(
-		&state.gate,
-		raw_data(ranges^),
-		len(ranges^)*size_of(Source_Range),
-		state.loc,
-	)
-	ranges^ = nil
-}
-
-@(private)
-parser_append_entry :: proc(
-	state: ^Parser_State,
-	key: ^string,
-	value: ^Value,
-	definition_range: Source_Range,
-	path: Parse_Diagnostic_Path,
-) -> Parse_Error {
-	if len(state.root) == max(int) {
-		return parse_limit_error(
-			state,
-			.Size_Overflow,
-			definition_range.start.byte,
-			definition_range.end.byte,
-			path,
-		)
-	}
-	count := len(state.root)+1
-	new_root, root_error := parser_make_table(
-		state,
-		count,
-		definition_range.start.byte,
-		definition_range.end.byte,
-		path,
-	)
-	if root_error != nil {
-		return root_error
-	}
-	new_ranges, ranges_error := parser_make_ranges(
-		state,
-		count,
-		definition_range.start.byte,
-		definition_range.end.byte,
-		path,
-	)
-	if ranges_error != nil {
-		release_owned_memory(
-			&state.gate,
-			raw_data(new_root),
-			cap(new_root)*size_of(Entry),
-			state.loc,
-		)
-		return ranges_error
-	}
-	if len(state.root) > 0 {
-		mem.copy_non_overlapping(
-			raw_data(new_root),
-			raw_data(state.root),
-			len(state.root)*size_of(Entry),
-		)
-		mem.copy_non_overlapping(
-			raw_data(new_ranges),
-			raw_data(state.ranges),
-			len(state.ranges)*size_of(Source_Range),
-		)
-	}
-	new_root[count-1] = {key = key^, value = value^}
-	new_ranges[count-1] = definition_range
-	key^ = ""
-	value^ = {}
-
-	old_root := state.root
-	old_ranges := state.ranges
-	state.root = new_root
-	state.ranges = new_ranges
-	release_owned_memory(
-		&state.gate,
-		raw_data(old_root),
-		cap(old_root)*size_of(Entry),
-		state.loc,
-	)
-	parser_release_ranges(state, &old_ranges)
-	return nil
-}
-
-@(private)
-parser_find_key :: proc(state: ^Parser_State, key: string) -> int {
-	for entry, index in state.root {
-		if entry.key == key {
-			return index
-		}
-	}
-	return -1
-}
-
-@(private)
 is_decimal_digit :: proc(value: byte) -> bool {
 	return '0' <= value && value <= '9'
 }
@@ -1555,155 +1430,8 @@ validate_comment :: proc(
 }
 
 @(private)
-parse_expression :: proc(state: ^Parser_State, start: int) -> (int, Parse_Error) {
-	key: string
-	key_end: int
-	key_source: Source_Byte_Range
-	key_error: Parse_Error
-	key, key_end, key_source, key_error = parse_simple_key(state, start)
-	if key_error != nil {
-		return 0, key_error
-	}
-	key_owned := true
-	defer if key_owned {
-		release_owned_text(state, &key)
-	}
-	path := parse_path_for_key(key, key_source)
-	if state.max_depth < 1 {
-		return 0, parse_limit_error(state, .Maximum_Depth_Exceeded, start, key_end, path)
-	}
-
-	index := skip_horizontal_whitespace(state.input, key_end)
-	if index < len(state.input) && state.input[index] == '\r' &&
-	   (index+1 >= len(state.input) || state.input[index+1] != '\n') {
-		return 0, parse_lexical_error(state, .Invalid_Newline, index, index+1, path)
-	}
-	if index < len(state.input) &&
-	   (state.input[index] < 0x20 && state.input[index] != '\n' && state.input[index] != '\r' ||
-	    state.input[index] == 0x7f || state.input[index] >= 0x80) {
-		return 0, parse_lexical_error(
-			state,
-			.Illegal_Character,
-			index,
-			index+utf8_scalar_size_at(state.input, index),
-			path,
-		)
-	}
-	if index >= len(state.input) || state.input[index] != '=' {
-		found := found_syntax_at(state.input, index)
-		return 0, parse_grammar_error(
-			state,
-			Parse_Syntax_Set{.Equals},
-			found,
-			index,
-			index,
-			path,
-		)
-	}
-
-	if existing := parser_find_key(state, key); existing >= 0 {
-		related := Optional_Source_Range{value = state.ranges[existing], ok = true}
-		return 0, parse_diagnostic(
-			state,
-			Parse_Diagnostic_Detail(Parse_Definition_Error{
-				kind = .Duplicate_Key,
-				existing = .Key_Value,
-				attempted = .Key_Value,
-			}),
-			key_source.start,
-			key_source.end,
-			path,
-			related,
-		)
-	}
-
-	index = skip_horizontal_whitespace(state.input, index+1)
-	if index >= len(state.input) || state.input[index] == '\n' || state.input[index] == '\r' ||
-	   state.input[index] == '#' {
-		found := found_syntax_at(state.input, index)
-		end := index
-		if index < len(state.input) && state.input[index] == '\r' &&
-		   index+1 < len(state.input) && state.input[index+1] == '\n' {
-			end += 2
-		} else if index < len(state.input) {
-			end += 1
-		}
-		return 0, parse_grammar_error(
-			state,
-			Parse_Syntax_Set{.Value},
-			found,
-			index,
-			end,
-			path,
-		)
-	}
-
-	value: Value
-	value_end: int
-	value_error: Parse_Error
-	parser_path_seed(state, path)
-	value_ok: bool
-	value, value_end, _, value_ok = parser_parse_value(state, index, .Document)
-	if !value_ok {
-		return 0, state.container_error
-	}
-	value_owned := true
-	defer if value_owned {
-		destroy_value_with_gate(&value, &state.gate, state.loc)
-	}
-
-	index = skip_horizontal_whitespace(state.input, value_end)
-	if index < len(state.input) && state.input[index] == '#' {
-		index, value_error = validate_comment(state, index, path)
-		if value_error != nil {
-			return 0, value_error
-		}
-	}
-	if index < len(state.input) && state.input[index] == '\r' {
-		if index+1 >= len(state.input) || state.input[index+1] != '\n' {
-			return 0, parse_lexical_error(state, .Invalid_Newline, index, index+1, path)
-		}
-	} else if index < len(state.input) && state.input[index] != '\n' {
-		if state.input[index] < 0x20 || state.input[index] == 0x7f ||
-		   state.input[index] >= 0x80 {
-			return 0, parse_lexical_error(
-				state,
-				.Illegal_Character,
-				index,
-				index+utf8_scalar_size_at(state.input, index),
-				path,
-			)
-		}
-		return 0, parse_grammar_error(
-			state,
-			Parse_Syntax_Set{.Expression_End},
-			found_syntax_at(state.input, index),
-			index,
-			index+utf8_scalar_size_at(state.input, index),
-			path,
-		)
-	}
-
-	definition_range := source_range(state.input, key_source.start, value_end)
-	if append_error := parser_append_entry(state, &key, &value, definition_range, path);
-	   append_error != nil {
-		return 0, append_error
-	}
-	key_owned = false
-	value_owned = false
-
-	if index >= len(state.input) {
-		return index, nil
-	}
-	if state.input[index] == '\r' {
-		return index+2, nil
-	}
-	return index+1, nil
-}
-
-@(private)
 parser_cleanup :: proc(state: ^Parser_State) {
-	parser_release_ranges(state, &state.ranges)
+	parser_release_nodes(state)
 	destroy_table_with_gate(&state.root, &state.gate, state.loc)
 }
 
@@ -1785,13 +1513,17 @@ parse_document :: proc(
 			)
 		}
 		expression_error: Parse_Error
-		index, expression_error = parse_expression(&state, index)
+		if input[index] == '[' {
+			index, expression_error = parse_header_expression(&state, index)
+		} else {
+			index, expression_error = parse_key_value_expression(&state, index)
+		}
 		if expression_error != nil {
 			return {}, expression_error
 		}
 	}
 
-	parser_release_ranges(&state, &state.ranges)
+	parser_release_nodes(&state)
 	document := Document{root = state.root, allocator = allocator}
 	state.root = {}
 	succeeded = true

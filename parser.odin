@@ -17,8 +17,10 @@ Parser_State :: struct {
 	gate:      Allocator_Release_Gate,
 	root:      Table,
 	ranges:    []Source_Range,
-	max_depth: int,
-	loc:       runtime.Source_Code_Location,
+	max_depth:      int,
+	container_path:  Parser_Path_Stack,
+	container_error: Parse_Error,
+	loc:             runtime.Source_Code_Location,
 }
 
 @(private)
@@ -261,23 +263,44 @@ hex_digit_value :: proc(value: byte) -> u32 {
 }
 
 @(private)
-emit_byte :: proc(output: []byte, output_index: ^int, value: byte) {
-	if output != nil {
-		output[output_index^] = value
+Quoted_Text_Output :: struct {
+	bytes: []byte,
+	start: int,
+}
+
+@(private)
+emit_byte :: proc(output: Quoted_Text_Output, output_index: ^int, value: byte) {
+	if output.bytes != nil && output.start <= output_index^ &&
+	   output_index^-output.start < len(output.bytes) {
+		output.bytes[output_index^-output.start] = value
 	}
 	output_index^ += 1
 }
 
 @(private)
-emit_bytes :: proc(output: []byte, output_index: ^int, input: string, start, count: int) {
-	if output != nil {
-		copy(output[output_index^:], transmute([]byte)input[start:start+count])
+emit_bytes :: proc(
+	output: Quoted_Text_Output,
+	output_index: ^int,
+	input: string,
+	start, count: int,
+) {
+	if output.bytes != nil {
+		capture_start := max(output_index^, output.start)
+		capture_end := min(output_index^+count, output.start+len(output.bytes))
+		if capture_start < capture_end {
+			input_offset := capture_start-output_index^
+			output_offset := capture_start-output.start
+			copy(
+				output.bytes[output_offset:output_offset+capture_end-capture_start],
+				transmute([]byte)input[start+input_offset:start+input_offset+capture_end-capture_start],
+			)
+		}
 	}
 	output_index^ += count
 }
 
 @(private)
-emit_scalar :: proc(output: []byte, output_index: ^int, scalar: u32) {
+emit_scalar :: proc(output: Quoted_Text_Output, output_index: ^int, scalar: u32) {
 	if scalar <= 0x7f {
 		emit_byte(output, output_index, byte(scalar))
 	} else if scalar <= 0x7ff {
@@ -296,7 +319,7 @@ emit_scalar :: proc(output: []byte, output_index: ^int, scalar: u32) {
 }
 
 @(private)
-emit_normalized_newline :: proc(output: []byte, output_index: ^int) {
+emit_normalized_newline :: proc(output: Quoted_Text_Output, output_index: ^int) {
 	when ODIN_OS == .Windows {
 		emit_byte(output, output_index, '\r')
 		emit_byte(output, output_index, '\n')
@@ -310,7 +333,7 @@ quoted_text_scan :: proc(
 	state: ^Parser_State,
 	start: int,
 	kind: Quoted_Text_Kind,
-	output: []byte,
+	output: Quoted_Text_Output,
 	path: Parse_Diagnostic_Path,
 ) -> (end, output_count: int, err: Parse_Error) {
 	multiline := kind == .Multiline_Basic || kind == .Multiline_Literal
@@ -550,7 +573,7 @@ parser_owned_text :: proc(
 	path: Parse_Diagnostic_Path,
 ) -> (text: string, end: int, err: Parse_Error) {
 	count: int
-	end, count, err = quoted_text_scan(state, start, kind, nil, path)
+	end, count, err = quoted_text_scan(state, start, kind, {}, path)
 	if err != nil {
 		return "", 0, err
 	}
@@ -565,7 +588,9 @@ parser_owned_text :: proc(
 		return "", 0, runtime.Allocator_Error.Out_Of_Memory
 	}
 	bytes := mem.byte_slice(memory, count)
-	second_end, second_count, second_error := quoted_text_scan(state, start, kind, bytes, path)
+	second_end, second_count, second_error := quoted_text_scan(
+		state, start, kind, Quoted_Text_Output{bytes = bytes}, path,
+	)
 	if second_error != nil || second_end != end || second_count != count {
 		release_owned_memory(&state.gate, memory, count, state.loc)
 		unreachable()
@@ -652,6 +677,7 @@ parse_path_for_key :: proc(key: string, key_source: Source_Byte_Range) -> Parse_
 parse_simple_key :: proc(
 	state: ^Parser_State,
 	start: int,
+	path: Parse_Diagnostic_Path = {},
 ) -> (key: string, end: int, key_range: Source_Byte_Range, err: Parse_Error) {
 	if start >= len(state.input) {
 		return "", 0, {}, parse_grammar_error(
@@ -660,6 +686,7 @@ parse_simple_key :: proc(
 			.End_Of_Input,
 			start,
 			start,
+			path,
 		)
 	}
 	character := state.input[start]
@@ -671,13 +698,14 @@ parse_simple_key :: proc(
 				.Invalid_Bare_Key,
 				start,
 				start+3,
+				path,
 			)
 		}
 		kind := Quoted_Text_Kind.Basic
 		if character == '\'' {
 			kind = .Literal
 		}
-		key, end, err = parser_owned_text(state, start, kind, {})
+		key, end, err = parser_owned_text(state, start, kind, path)
 		if err != nil {
 			return "", 0, {}, err
 		}
@@ -690,6 +718,7 @@ parse_simple_key :: proc(
 			.Invalid_Bare_Key,
 			start,
 			scalar_end,
+			path,
 		)
 	}
 	end = start+1
@@ -903,6 +932,7 @@ scan_scalar_candidate :: proc(
 	state: ^Parser_State,
 	start: int,
 	path: Parse_Diagnostic_Path,
+	ctx: Parser_Value_Context = .Document,
 ) -> (int, Parse_Error) {
 	index := start
 	date_candidate := has_date_prefix(state.input[start:])
@@ -916,7 +946,9 @@ scan_scalar_candidate :: proc(
 			}
 			break
 		}
-		if character == '\t' || character == '\n' || character == '#' {
+		if character == '\t' || character == '\n' || character == '#' ||
+		   ctx == .Array && (character == ',' || character == ']') ||
+		   ctx == .Inline_Table && (character == ',' || character == '}') {
 			break
 		}
 		if character == '\r' {
@@ -1607,38 +1639,13 @@ parse_expression :: proc(state: ^Parser_State, start: int) -> (int, Parse_Error)
 	}
 
 	value: Value
+	value_end: int
 	value_error: Parse_Error
-	value_end := index
-	if state.input[index] == '"' || state.input[index] == '\'' {
-		character := state.input[index]
-		kind := Quoted_Text_Kind.Basic
-		if character == '\'' {
-			kind = .Literal
-		}
-		if index+2 < len(state.input) && state.input[index+1] == character &&
-		   state.input[index+2] == character {
-			kind = .Multiline_Basic
-			if character == '\'' {
-				kind = .Multiline_Literal
-			}
-		}
-		text: string
-		text, value_end, value_error = parser_owned_text(state, index, kind, path)
-		if value_error == nil {
-			value = Value(String(text))
-		}
-	} else {
-		value_end, value_error = scan_scalar_candidate(state, index, path)
-		if value_error == nil {
-			if value_end == index {
-				value_error = parse_value_error(state, .Invalid_Value, index, index+1, path)
-			} else {
-				value, value_error = parse_scalar_candidate(state, index, value_end, path)
-			}
-		}
-	}
-	if value_error != nil {
-		return 0, value_error
+	parser_path_seed(state, path)
+	value_ok: bool
+	value, value_end, _, value_ok = parser_parse_value(state, index, .Document)
+	if !value_ok {
+		return 0, state.container_error
 	}
 	value_owned := true
 	defer if value_owned {

@@ -289,7 +289,7 @@ test_rejection_families_have_nearest_valid_neighbors_through_both_overloads :: p
 		{"a = 1\n", "a = value\n"},
 		{"a = \"foo.bar\"\n", "a = foo.bar\n"},
 		{"a = 1\nb = 2\n", "a = 1\na = 2\n"},
-		{"a = 1\n", "a = [1]\n"},
+		{"a = [1]\n", "a = [1 2]\n"},
 	}
 	for test_case in cases {
 		expect_valid_through_both_overloads(t, test_case.valid)

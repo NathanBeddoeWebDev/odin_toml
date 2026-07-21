@@ -24,6 +24,12 @@ Successful parse and clone calls return owners. `get` returns only a borrowed po
 
 The executable [`examples/semantic_lifecycle`](examples/semantic_lifecycle/main.odin) demonstrates an initialized empty document and the difference between a borrowed `get` result and an owned deep clone.
 
+## Codec registry lifecycle
+
+Create each caller-owned `Codec_Registry` with `init_codec_registry`, register marshal and unmarshal callbacks independently by exact `typeid`, and release the registry with `destroy_codec_registry`. The registry retains the selected allocator and owns only its two lookup maps. Callback code and `user_data` remain application-owned and must outlive every call that borrows them.
+
+Complete registration before sharing a registry. Concurrent read-only lookup through a frozen registry is supported; callers must separately synchronize any mutable callback state reached through `user_data`. Registration or destruction while any TOML call or other reader is using the registry is a caller contract violation. Destruction zeros the owner and is idempotent. There is no package-global codec registry.
+
 ## Reproducible checks
 
 The supported compiler is pinned in [`toolchain/odin.lock`](toolchain/odin.lock). With that compiler on `PATH`:

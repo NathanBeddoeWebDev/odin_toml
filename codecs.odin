@@ -49,13 +49,100 @@ init_codec_registry :: proc(
 	allocator := context.allocator,
 	loc := #caller_location,
 ) -> (Codec_Registry, Codec_Registry_Error) {
-	_, _ = allocator, loc
-	unimplemented("codec registry implementation is scheduled for ticket 10")
+	_ = loc
+	if allocator.procedure == nil {
+		return {}, Codec_Registry_Data_Error.Invalid_Allocator
+	}
+	return Codec_Registry{
+		marshalers = make(map[typeid]Codec_Marshaler, allocator),
+		unmarshalers = make(map[typeid]Codec_Unmarshaler, allocator),
+		allocator = allocator,
+		initialized = true,
+	}, nil
+}
+
+@(private)
+release_codec_map_storage :: proc(
+	gate: ^Allocator_Release_Gate,
+	mapping: $M/map[$K]$V,
+	loc: runtime.Source_Code_Location,
+) {
+	if cap(mapping) == 0 {
+		return
+	}
+	raw_map := transmute(runtime.Raw_Map)mapping
+	err := allocator_release_gate_release(
+		gate,
+		rawptr(runtime.map_data(raw_map)),
+		int(runtime.map_total_allocation_size_from_value(mapping)),
+		loc,
+	)
+	assert(err == nil, "codec registry allocator violated its destruction contract")
 }
 
 destroy_codec_registry :: proc(registry: ^Codec_Registry, loc := #caller_location) {
-	_, _ = registry, loc
-	unimplemented("codec registry implementation is scheduled for ticket 10")
+	if registry == nil || !registry.initialized {
+		return
+	}
+	owner := registry^
+	registry^ = {}
+	gate, gate_error := allocator_release_gate_init(owner.allocator, loc)
+	assert(gate_error == nil, "codec registry allocator rejected destruction setup")
+	release_codec_map_storage(&gate, owner.marshalers, loc)
+	release_codec_map_storage(&gate, owner.unmarshalers, loc)
+	owner = {}
+}
+
+@(private)
+codec_registry_is_valid :: proc(registry: ^Codec_Registry) -> bool {
+	return registry != nil && registry.initialized &&
+	       registry.allocator.procedure != nil &&
+	       allocator_equal(registry.marshalers.allocator, registry.allocator) &&
+	       allocator_equal(registry.unmarshalers.allocator, registry.allocator)
+}
+
+@(private)
+validate_codec_registration :: proc(
+	registry: ^Codec_Registry,
+	id: typeid,
+	has_callback: bool,
+) -> Codec_Registry_Error {
+	if !codec_registry_is_valid(registry) {
+		return Codec_Registry_Data_Error.Invalid_Registry
+	}
+	zero_id: typeid
+	if id == zero_id {
+		return Codec_Registry_Data_Error.Invalid_Type_ID
+	}
+	if !has_callback {
+		return Codec_Registry_Data_Error.Nil_Callback
+	}
+	return nil
+}
+
+@(private)
+register_directional_codec :: proc(
+	mapping: ^$M/map[typeid]$V,
+	id: typeid,
+	codec: V,
+	loc: runtime.Source_Code_Location,
+) -> Codec_Registry_Error {
+	if id in mapping^ {
+		return Codec_Registry_Data_Error.Duplicate_Codec
+	}
+	key := id
+	value := codec
+	_, err := runtime.__dynamic_map_set_without_hash(
+		(^runtime.Raw_Map)(mapping),
+		runtime.map_info(M),
+		rawptr(&key),
+		rawptr(&value),
+		loc,
+	)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 @(require_results)
@@ -65,8 +152,14 @@ register_marshaler :: proc(
 	marshaler: Codec_Marshaler,
 	loc := #caller_location,
 ) -> Codec_Registry_Error {
-	_, _, _, _ = registry, id, marshaler, loc
-	unimplemented("codec registry implementation is scheduled for ticket 10")
+	if err := validate_codec_registration(
+		registry,
+		id,
+		marshaler.procedure != nil,
+	); err != nil {
+		return err
+	}
+	return register_directional_codec(&registry.marshalers, id, marshaler, loc)
 }
 
 @(require_results)
@@ -76,6 +169,12 @@ register_unmarshaler :: proc(
 	unmarshaler: Codec_Unmarshaler,
 	loc := #caller_location,
 ) -> Codec_Registry_Error {
-	_, _, _, _ = registry, id, unmarshaler, loc
-	unimplemented("codec registry implementation is scheduled for ticket 10")
+	if err := validate_codec_registration(
+		registry,
+		id,
+		unmarshaler.procedure != nil,
+	); err != nil {
+		return err
+	}
+	return register_directional_codec(&registry.unmarshalers, id, unmarshaler, loc)
 }

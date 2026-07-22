@@ -5,7 +5,7 @@ import "core:io"
 import "core:mem"
 import "core:testing"
 import toml "../.."
-import temporal "../../vendor/temporal"
+import temporal "external:temporal"
 import test_support "../support"
 
 MALFORMED_OWNER_KIND_COUNT :: 7

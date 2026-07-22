@@ -1,7 +1,7 @@
 package consumer_semantic
 
 import toml "../.."
-import "../../vendor/temporal"
+import "external:temporal"
 
 main :: proc() {
 	date := temporal.Local_Date{year = 2026, month = 7, day = 1}

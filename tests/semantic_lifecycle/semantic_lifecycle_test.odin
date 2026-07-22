@@ -4,7 +4,7 @@ import "base:runtime"
 import "core:mem"
 import "core:testing"
 import toml "../.."
-import temporal "../../vendor/temporal"
+import temporal "external:temporal"
 import test_support "../support"
 
 allocator_equal :: proc(a, b: mem.Allocator) -> bool {

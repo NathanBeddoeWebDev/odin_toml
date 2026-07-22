@@ -14,7 +14,7 @@ fi
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/odin-toml-documentation.XXXXXX")
 trap 'rm -rf "$work"' EXIT
-common=(-vet -vet-style -warnings-as-errors)
+common=(-collection:external="$repo_root/external" -vet -vet-style -warnings-as-errors)
 examples=(
   semantic_lifecycle
   typed_unmarshal_cleanup

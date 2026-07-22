@@ -16,7 +16,7 @@ report=build/reports/rtti-feasibility.txt
 : >"$report"
 printf '%s\n' "$actual_version" | tee -a "$report"
 
-common=(-vet -vet-style -warnings-as-errors)
+common=(-collection:external="$repo_root/external" -vet -vet-style -warnings-as-errors)
 for mode in minimal speed; do
   odin run tests/rtti_probe "-o:$mode" "${common[@]}"
   printf 'RTTI feasibility probe passed in %s mode\n' "$mode" | tee -a "$report"

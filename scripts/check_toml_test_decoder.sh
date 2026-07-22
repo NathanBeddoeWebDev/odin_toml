@@ -36,6 +36,7 @@ mkdir -p build/reports build/tools
 runner_version=$(build/tools/toml-test version)
 [[ "$runner_version" == "toml-test v2.2.0;"* ]]
 odin build cmd/toml_test_decoder -file \
+  -collection:external="$repo_root/external" \
   -out:build/tools/toml-test-decoder \
   -vet -vet-style -warnings-as-errors
 

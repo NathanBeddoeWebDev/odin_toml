@@ -3,7 +3,7 @@ package toml
 import "base:runtime"
 import "core:reflect"
 import "core:unicode/utf8"
-import temporal "vendor/temporal"
+import temporal "external:temporal"
 
 @(private)
 marshal_integer_value :: proc(

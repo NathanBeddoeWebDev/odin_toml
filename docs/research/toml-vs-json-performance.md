@@ -80,5 +80,5 @@ represent identical logical values but are not byte-identical.
 Reproduce from `odin_config` with:
 
 ```sh
-odin run benchmarks -o:speed -vet -vet-style -warnings-as-errors
+odin run benchmarks -collection:external=external -o:speed -vet -vet-style -warnings-as-errors
 ```

@@ -59,6 +59,7 @@ def run_driver(mode: str) -> tuple[str, list[str]]:
         "odin",
         "build",
         "benchmarks",
+        f"-collection:external={ROOT / 'external'}",
         "-o:speed",
         "-vet",
         "-vet-style",

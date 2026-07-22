@@ -7,7 +7,7 @@ The package accepts no permissive, recovery, legacy, or extension mode. Public d
 ## Packages
 
 - Repository root: package `toml`
-- [`vendor/temporal/`](vendor/temporal): package `temporal`, a git submodule backed by the sibling [`odin_temporal`](../odin_temporal) repository
+- [`external/temporal/`](external/temporal): package `temporal`, a git submodule backed by the sibling [`odin_temporal`](../odin_temporal) repository
 
 Initialize the dependency after cloning:
 
@@ -15,7 +15,7 @@ Initialize the dependency after cloning:
 git submodule update --init --recursive
 ```
 
-`toml` imports the vendored `temporal` package; `temporal` does not import `toml`. External consumers can use a relative import or map the repository into an Odin collection.
+`toml` imports `temporal` through the `external` collection; `temporal` does not import `toml`. Build TOML consumers with `-collection:external=external` (or an absolute path to this repository's `external` directory). External consumers can use a relative import or map the repository into an Odin collection.
 
 ## Consumer contract
 

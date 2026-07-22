@@ -6,7 +6,7 @@ import "core:mem"
 import "core:reflect"
 import "core:testing"
 import toml "../.."
-import temporal "../../vendor/temporal"
+import temporal "external:temporal"
 import test_support "../support"
 
 owned_string :: proc(text: string, allocator: mem.Allocator) -> string {

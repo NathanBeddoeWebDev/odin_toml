@@ -3,7 +3,7 @@ package main
 import "core:strings"
 import "core:testing"
 import toml "../.."
-import temporal "../../vendor/temporal"
+import temporal "external:temporal"
 
 @(test)
 test_decoder_adapter_translates_public_parse_results_to_tagged_json :: proc(t: ^testing.T) {

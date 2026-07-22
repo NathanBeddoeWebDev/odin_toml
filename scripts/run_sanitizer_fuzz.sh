@@ -35,7 +35,7 @@ command -v clang >/dev/null
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/odin-toml-asan-fuzz.XXXXXX")
 trap 'rm -rf "$work"' EXIT
-common=(-o:minimal -vet -vet-style -warnings-as-errors)
+common=(-collection:external="$repo_root/external" -o:minimal -vet -vet-style -warnings-as-errors)
 
 # Odin's ordinary entrypoint initializes package globals before user code. libFuzzer
 # replaces that entrypoint, so initialize the pinned compiler runtime explicitly.

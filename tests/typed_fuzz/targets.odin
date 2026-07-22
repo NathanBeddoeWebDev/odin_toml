@@ -5,7 +5,7 @@ import "core:io"
 import "core:mem"
 import "core:strings"
 import toml "../.."
-import temporal "../../vendor/temporal"
+import temporal "external:temporal"
 import test_support "../support"
 
 Property_Codec :: distinct u8

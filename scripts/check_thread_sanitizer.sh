@@ -29,7 +29,8 @@ test "$(odin version)" = "odin version $expected_version"
 
 mkdir -p build/reports
 log=build/reports/thread-sanitizer.log
-odin test tests/codec_registry -o:minimal -vet -vet-style -warnings-as-errors \
+odin test tests/codec_registry -o:minimal -collection:external="$repo_root/external" \
+  -vet -vet-style -warnings-as-errors \
   -sanitize:thread \
   -define:ODIN_TEST_THREADS=1 \
   -define:ODIN_TEST_RANDOM_SEED=123456789 \

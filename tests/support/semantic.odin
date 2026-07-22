@@ -2,7 +2,7 @@ package test_support
 
 import "core:math"
 import toml "../.."
-import temporal "../../vendor/temporal"
+import temporal "external:temporal"
 
 semantic_value_equal :: proc(a, b: ^toml.Value) -> bool {
 	switch a_value in a^ {

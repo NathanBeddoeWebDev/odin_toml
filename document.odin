@@ -3,7 +3,7 @@ package toml
 import "base:runtime"
 import "core:mem"
 import "core:unicode/utf8"
-import temporal "vendor/temporal"
+import temporal "external:temporal"
 
 @(private)
 clone_configuration_error :: proc(kind: Clone_Configuration_Error) -> Clone_Error {

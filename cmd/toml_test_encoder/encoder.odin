@@ -8,7 +8,7 @@ import "core:mem"
 import "core:slice"
 import "core:strings"
 import toml "../.."
-import temporal "../../vendor/temporal"
+import temporal "external:temporal"
 
 Adapter_Error_Kind :: enum u8 {
 	Malformed_Input,

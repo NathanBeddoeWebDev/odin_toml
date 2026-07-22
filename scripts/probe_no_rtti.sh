@@ -16,6 +16,7 @@ report=build/reports/no-rtti.txt
 
 set +e
 odin check tests/consumer_semantic \
+  -collection:external="$repo_root/external" \
   -target:freestanding_amd64_sysv \
   -no-rtti \
   -vet -vet-style -warnings-as-errors >"$report" 2>&1

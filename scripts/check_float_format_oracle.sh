@@ -13,7 +13,8 @@ fi
 work=$(mktemp -d "${TMPDIR:-/tmp}/odin-toml-float-format.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 
-odin build tests/float_format_oracle -o:minimal -vet -vet-style -warnings-as-errors \
+odin build tests/float_format_oracle -o:minimal -collection:external="$repo_root/external" \
+  -vet -vet-style -warnings-as-errors \
   -define:TOML_BINARY64_FORMAT_GATE_TESTING=true \
   -out:"$work/format-vectors"
 "$work/format-vectors" > "$work/first.tsv"

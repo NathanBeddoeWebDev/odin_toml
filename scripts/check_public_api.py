@@ -39,7 +39,7 @@ SOURCE_LOCATION = re.compile(r" /\* \d+!\d+ \*/")
 
 def documented_api(package_dir: Path) -> str:
     result = subprocess.run(
-        ["odin", "doc", str(package_dir)],
+        ["odin", "doc", str(package_dir), f"-collection:external={ROOT / 'external'}"],
         cwd=ROOT,
         text=True,
         capture_output=True,
@@ -92,6 +92,7 @@ def check_runtime_dependencies() -> list[str]:
                 "odin",
                 "build",
                 "tests/consumer_semantic",
+                f"-collection:external={ROOT / 'external'}",
                 f"-out:{executable}",
                 "-export-dependencies:json",
                 f"-export-dependencies-file:{dependency_file}",

@@ -22,7 +22,7 @@ scripts/check_diagnostic_ledger.py
 python3 -m unittest discover -s tests/release_bundle -p 'test_*.py'
 scripts/assemble_release_bundle.py check-tracked
 
-common=(-vet -vet-style -warnings-as-errors)
+common=(-collection:external="$repo_root/external" -vet -vet-style -warnings-as-errors)
 
 check_jobs=${CHECK_JOBS:-4}
 if ! [[ "$check_jobs" =~ ^[1-9][0-9]*$ ]]; then
@@ -98,7 +98,7 @@ queue_odin_test() {
 }
 
 odin check . -no-entry-point "${common[@]}"
-odin check vendor/temporal -no-entry-point "${common[@]}"
+odin check external/temporal -no-entry-point "${common[@]}"
 for target in linux_amd64 linux_arm64 darwin_amd64 darwin_arm64 windows_amd64; do
   odin check . -no-entry-point "-target:$target" "${common[@]}"
 done

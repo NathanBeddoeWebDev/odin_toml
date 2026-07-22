@@ -3,7 +3,7 @@ package toml
 import "base:runtime"
 import "core:math/big"
 import "core:mem"
-import temporal "vendor/temporal"
+import temporal "external:temporal"
 
 parse :: proc {
 	parse_bytes,

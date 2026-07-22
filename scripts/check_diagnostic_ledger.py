@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DECLARATION_SOURCES = (
     (ROOT / "errors.odin", "", None),
     (ROOT / "codecs.odin", "", None),
-    (ROOT / "vendor" / "temporal" / "types.odin", "temporal.", {"Error"}),
+    (ROOT / "external" / "temporal" / "types.odin", "temporal.", {"Error"}),
 )
 LEDGER = ROOT / "tests" / "diagnostic_acceptance" / "diagnostic-ledger.json"
 

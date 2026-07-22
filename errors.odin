@@ -2,7 +2,7 @@ package toml
 
 import "base:runtime"
 import "core:io"
-import temporal "vendor/temporal"
+import temporal "external:temporal"
 
 Source_Position :: struct {
 	byte:   int,

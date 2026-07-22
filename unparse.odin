@@ -3,7 +3,7 @@ package toml
 import "base:runtime"
 import "core:io"
 import "core:mem"
-import temporal "vendor/temporal"
+import temporal "external:temporal"
 
 @(private)
 Canonical_Encoder_Mode :: enum u8 {

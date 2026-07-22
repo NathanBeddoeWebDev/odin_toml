@@ -39,18 +39,20 @@ Parser_Node_Array :: distinct [dynamic]Parser_Node
 @(private)
 parser_make_binding_ranges :: proc(
 	state: ^Parser_State,
-	count, start, end: int,
+	count, capacity: int,
+	start, end: int,
 ) -> (Binding_Range_Node_Array, Parse_Error) {
-	if count < 0 || count > max(int)/size_of(Binding_Range_Node) {
+	if count < 0 || capacity < count ||
+	   capacity > max(int)/size_of(Binding_Range_Node) {
 		return {}, parse_limit_error(
-			state, .Size_Overflow, start, end, parser_path_snapshot(state),
+			state, .Size_Overflow, start, end, .Current,
 		)
 	}
 	memory: rawptr
-	if count > 0 {
+	if capacity > 0 {
 		allocation_error: runtime.Allocator_Error
 		memory, allocation_error = allocator_allocate(
-			count*size_of(Binding_Range_Node), state.allocator, true, state.loc,
+			capacity*size_of(Binding_Range_Node), state.allocator, true, state.loc,
 		)
 		if allocation_error != nil {
 			return {}, allocation_error
@@ -59,7 +61,7 @@ parser_make_binding_ranges :: proc(
 			return {}, runtime.Allocator_Error.Out_Of_Memory
 		}
 	}
-	raw := runtime.Raw_Dynamic_Array{memory, count, count, state.allocator}
+	raw := runtime.Raw_Dynamic_Array{memory, count, capacity, state.allocator}
 	return transmute(Binding_Range_Node_Array)raw, nil
 }
 
@@ -72,21 +74,38 @@ parser_append_binding_range :: proc(
 	if !state.capture_binding_ranges {
 		return 0, nil
 	}
+	index := len(state.binding_ranges)
+	if index < cap(state.binding_ranges) {
+		raw := transmute(runtime.Raw_Dynamic_Array)state.binding_ranges
+		raw.len = index+1
+		state.binding_ranges = transmute(Binding_Range_Node_Array)raw
+		state.binding_ranges[index].key_source = source
+		state.binding_ranges[index].source = source
+		return index+1, nil
+	}
+	capacity, capacity_ok := parser_growth_capacity(
+		cap(state.binding_ranges), index+1, size_of(Binding_Range_Node),
+	)
+	if !capacity_ok {
+		return 0, parse_limit_error(
+			state, .Size_Overflow, start, end, .Current,
+		)
+	}
 	replacement, err := parser_make_binding_ranges(
-		state, len(state.binding_ranges)+1, start, end,
+		state, index+1, capacity, start, end,
 	)
 	if err != nil {
 		return 0, err
 	}
-	if len(state.binding_ranges) > 0 {
+	if index > 0 {
 		mem.copy_non_overlapping(
 			raw_data(replacement),
 			raw_data(state.binding_ranges),
-			len(state.binding_ranges)*size_of(Binding_Range_Node),
+			index*size_of(Binding_Range_Node),
 		)
 	}
-	replacement[len(state.binding_ranges)].key_source = source
-	replacement[len(state.binding_ranges)].source = source
+	replacement[index].key_source = source
+	replacement[index].source = source
 	old := state.binding_ranges
 	state.binding_ranges = replacement
 	release_owned_memory(
@@ -95,7 +114,7 @@ parser_append_binding_range :: proc(
 		cap(old)*size_of(Binding_Range_Node),
 		state.loc,
 	)
-	return len(state.binding_ranges), nil
+	return index+1, nil
 }
 
 @(private)
@@ -175,7 +194,7 @@ parser_make_nodes :: proc(
 ) -> (Parser_Node_Array, Parse_Error) {
 	if count < 0 || capacity < count || capacity > max(int)/size_of(Parser_Node) {
 		return {}, parse_limit_error(
-			state, .Size_Overflow, start, end, parser_path_snapshot(state),
+			state, .Size_Overflow, start, end, .Current,
 		)
 	}
 	memory: rawptr
@@ -203,7 +222,7 @@ parser_append_node :: proc(
 ) -> (int, Parse_Error) {
 	if len(state.nodes) == max(int) {
 		return 0, parse_limit_error(
-			state, .Size_Overflow, start, end, parser_path_snapshot(state),
+			state, .Size_Overflow, start, end, .Current,
 		)
 	}
 	index := len(state.nodes)
@@ -395,9 +414,6 @@ parser_append_child :: proc(
 parser_path_copy :: proc(destination: ^Parser_Path_Stack, source: ^Parser_Path_Stack) {
 	destination.count = source.count
 	copy(destination.segments[:source.count], source.segments[:source.count])
-	for index in source.count..<len(destination.segments) {
-		destination.segments[index] = {}
-	}
 }
 
 @(private)
@@ -423,7 +439,7 @@ parser_definition_diagnostic :: proc(
 		Parse_Diagnostic_Detail(Parse_Definition_Error{kind, existing, attempted}),
 		primary.start,
 		primary.end,
-		parser_path_snapshot(state),
+		.Current,
 		Optional_Source_Range{
 			source_range(state.input, related.start, related.end),
 			true,
@@ -456,11 +472,11 @@ parser_parse_owned_path_key :: proc(
 			.Maximum_Depth_Exceeded,
 			preflight_range.start,
 			preflight_range.end,
-			parser_path_snapshot(state),
+			.Current,
 		)
 	}
 	key, end, key_range, err = parse_simple_key(
-		state, start, CURRENT_PARSE_DIAGNOSTIC_PATH,
+		state, start, .Current,
 	)
 	if err != nil {
 		return "", 0, {}, err
@@ -482,7 +498,7 @@ parser_create_table_child :: proc(
 		0,
 		key_range.start,
 		key_range.end,
-		CURRENT_PARSE_DIAGNOSTIC_PATH,
+		.Current,
 	)
 	if err != nil {
 		return 0, err
@@ -550,14 +566,14 @@ parser_descend_child :: proc(
 		assert(node.latest_element_id != 0)
 		latest := node.latest_element_id
 		latest_index := state.nodes[latest-1].semantic_index
-		parser_path_push(state, Parse_Diagnostic_Path_Segment(Path_Index(latest_index)))
+		parser_path_push(state, Parser_Path_Segment(Path_Index(latest_index)))
 		if state.container_path.count > state.max_depth {
 			return 0, parse_limit_error(
 				state,
 				.Maximum_Depth_Exceeded,
 				key_range.start,
 				key_range.end,
-				parser_path_snapshot(state),
+				.Current,
 			)
 		}
 		return latest, nil
@@ -624,7 +640,7 @@ parser_finish_document_line :: proc(
 	if index < len(state.input) && state.input[index] == '#' {
 		comment_error: Parse_Error
 		index, comment_error = validate_comment(
-			state, index, parser_path_snapshot(state),
+			state, index, .Current,
 		)
 		if comment_error != nil {
 			return 0, comment_error
@@ -636,7 +652,7 @@ parser_finish_document_line :: proc(
 	if state.input[index] == '\r' {
 		if index+1 >= len(state.input) || state.input[index+1] != '\n' {
 			return 0, parse_lexical_error(
-				state, .Invalid_Newline, index, index+1, parser_path_snapshot(state),
+				state, .Invalid_Newline, index, index+1, .Current,
 			)
 		}
 		return index+2, nil
@@ -651,7 +667,7 @@ parser_finish_document_line :: proc(
 			.Illegal_Character,
 			index,
 			index+utf8_scalar_size_at(state.input, index),
-			parser_path_snapshot(state),
+			.Current,
 		)
 	}
 	return 0, parse_grammar_error(
@@ -660,7 +676,7 @@ parser_finish_document_line :: proc(
 		found_syntax_at(state.input, index),
 		index,
 		index+utf8_scalar_size_at(state.input, index),
-		parser_path_snapshot(state),
+		.Current,
 	)
 }
 
@@ -672,7 +688,7 @@ parser_path_separator_error :: proc(state: ^Parser_State, index: int) -> Parse_E
 	if state.input[index] == '\r' &&
 	   (index+1 >= len(state.input) || state.input[index+1] != '\n') {
 		return parse_lexical_error(
-			state, .Invalid_Newline, index, index+1, parser_path_snapshot(state),
+			state, .Invalid_Newline, index, index+1, .Current,
 		)
 	}
 	if state.input[index] < 0x20 && state.input[index] != '\n' &&
@@ -683,7 +699,7 @@ parser_path_separator_error :: proc(state: ^Parser_State, index: int) -> Parse_E
 			.Illegal_Character,
 			index,
 			index+utf8_scalar_size_at(state.input, index),
-			parser_path_snapshot(state),
+			.Current,
 		)
 	}
 	return nil
@@ -744,7 +760,7 @@ parse_key_value_expression :: proc(state: ^Parser_State, start: int) -> (int, Pa
 				found_syntax_at(state.input, index),
 				index,
 				index,
-				parser_path_snapshot(state),
+				.Current,
 			)
 		}
 		value_start := skip_horizontal_whitespace(state.input, index+1)
@@ -774,7 +790,7 @@ parse_key_value_expression :: proc(state: ^Parser_State, start: int) -> (int, Pa
 				found_syntax_at(state.input, index),
 				index,
 				end,
-				parser_path_snapshot(state),
+				.Current,
 			)
 		}
 		value, value_end, form, ok := parser_parse_value(state, index, .Document)
@@ -868,7 +884,7 @@ parser_append_aot_element :: proc(
 	assert(array_ok)
 	prospective_index := len(array)
 	parser_path_push(
-		state, Parse_Diagnostic_Path_Segment(Path_Index(prospective_index)),
+		state, Parser_Path_Segment(Path_Index(prospective_index)),
 	)
 	if state.container_path.count > state.max_depth {
 		return 0, parse_limit_error(
@@ -876,7 +892,7 @@ parser_append_aot_element :: proc(
 			.Maximum_Depth_Exceeded,
 			key_range.start,
 			key_range.end,
-			parser_path_snapshot(state),
+			.Current,
 		)
 	}
 	table, table_error := parser_make_table(
@@ -884,7 +900,7 @@ parser_append_aot_element :: proc(
 		0,
 		key_range.start,
 		key_range.end,
-		CURRENT_PARSE_DIAGNOSTIC_PATH,
+		.Current,
 	)
 	if table_error != nil {
 		return 0, table_error
@@ -999,7 +1015,7 @@ parse_header_expression :: proc(state: ^Parser_State, start: int) -> (int, Parse
 				found_syntax_at(state.input, index),
 				index,
 				index+min(1, len(state.input)-index),
-				parser_path_snapshot(state),
+				.Current,
 			)
 		}
 		key, key_end, key_range, key_error := parser_parse_owned_path_key(state, index)
@@ -1063,7 +1079,7 @@ parse_header_expression :: proc(state: ^Parser_State, start: int) -> (int, Parse
 					found_syntax_at(state.input, closing_index),
 					closing_index,
 					closing_index+min(1, len(state.input)-closing_index),
-					parser_path_snapshot(state),
+					.Current,
 				)
 			}
 		}

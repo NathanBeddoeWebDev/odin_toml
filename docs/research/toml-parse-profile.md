@@ -119,3 +119,35 @@ The first two diagnostic probes together establish an approximate 34.5 us
 parse-plus-destroy ceiling for this fixture before deeper parser/data-model
 work. They do not establish the performance of a diagnostics-correct
 implementation.
+
+## Follow-up implementation measurements
+
+A later implementation pass used the recovered `../odin_config/benchmarks`
+harness with the same compiler and fixture. One complete seven-sample invocation
+was run before the pass and after each ordinary-parse change:
+
+| Checkpoint | Complete TOML | Semantic parse | Parse allocations |
+| --- | ---: | ---: | ---: |
+| Commit `266fd1d` baseline | 32.78 us | 28.07 us | 79 |
+| Compact lazy diagnostic paths | 29.55 us | 24.25 us | 79 |
+| Geometric semantic Table/Array growth | 27.37 us | 21.75 us | 73 |
+
+Compact paths retain only source byte ranges or array indexes while parsing.
+Exact public key snapshots, including decoded escapes and UTF-8-safe long-key
+boundaries, are reconstructed without allocation only when an error is emitted.
+The change also replaces the full public-path sentinel passed by value and stops
+clearing inactive 257-segment stack tails.
+
+Three final comparison invocations produced a median of invocation medians of
+27.80 us complete and 21.87 us for semantic parse, with 73 semantic-parse
+allocation requests. Relative to the 32.78/28.07 us pass baseline, that is about
+15.2% lower complete time and 22.1% lower semantic-parse time. Allocation counts
+fell by six because geometric semantic buffers reuse spare capacity.
+
+The separate five-sample in-repository recorder measured typed unmarshal at
+14.37 us before geometric binding-range scratch growth and 13.57 us afterward
+(5.6% lower). Its codec-heavy case fell from 213.43 us to 192.21 us (9.9%). The
+ordinary parse category moved from 19.48 us to 19.76 us, consistent with noise
+because ordinary parsing does not retain binding ranges. These observations are
+non-gating and requested-byte totals remain cumulative rather than peak-live
+measurements.

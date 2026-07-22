@@ -437,6 +437,29 @@ test_root_comment_diagnostic_does_not_reuse_previous_key_path :: proc(t: ^testin
 }
 
 @(test)
+test_lazy_diagnostic_path_decodes_escaped_and_unicode_keys :: proc(t: ^testing.T) {
+	input := `"\u03B1".'β'.leaf = nope
+`
+	doc, err := toml.parse_string(input)
+	testing.expect(t, document_is_zero(doc))
+	diagnostic, diagnostic_ok := parse_diagnostic_from(err)
+	testing.expect(t, diagnostic_ok)
+	value_error, value_error_ok := diagnostic.detail.(toml.Parse_Value_Error)
+	testing.expect(t, value_error_ok)
+	testing.expect_value(t, value_error.kind, toml.Parse_Value_Error_Kind.Invalid_Value)
+	testing.expect_value(t, diagnostic.path.segment_count, u8(3))
+	expected_text := [?]string{"α", "β", "leaf"}
+	expected_source := [?]toml.Source_Byte_Range{{0, 8}, {9, 13}, {14, 18}}
+	for index in 0..<len(expected_text) {
+		key, key_ok := diagnostic.path.segments[index].(toml.Parse_Diagnostic_Key)
+		testing.expect(t, key_ok)
+		testing.expect_value(t, string(key.bytes[:key.prefix_length]), expected_text[index])
+		testing.expect_value(t, key.decoded_byte_length, len(expected_text[index]))
+		testing.expect_value(t, key.source, expected_source[index])
+	}
+}
+
+@(test)
 test_ordinary_diagnostic_coordinates_count_unicode_scalars_tabs_and_crlf :: proc(t: ^testing.T) {
 	input := "ok = 1\r\n\"é\"\t 1\n"
 	doc, err := toml.parse_string(input)

@@ -11,39 +11,42 @@ Parser_Value_Context :: enum u8 {
 }
 
 @(private)
+Parser_Path_Segment :: union #no_nil {
+	Source_Byte_Range,
+	Path_Index,
+}
+
+@(private)
 Parser_Path_Stack :: struct {
-	segments: [257]Parse_Diagnostic_Path_Segment,
+	segments: [257]Parser_Path_Segment,
 	count:    int,
 }
 
 @(private)
-parser_path_seed :: proc(state: ^Parser_State, path: Parse_Diagnostic_Path) {
-	state.container_path.count = int(path.total_segment_count)
-	assert(!path.truncated)
-	for index in 0..<int(path.segment_count) {
-		state.container_path.segments[index] = path.segments[index]
-	}
-}
-
-@(private)
-parser_path_push :: proc(state: ^Parser_State, segment: Parse_Diagnostic_Path_Segment) {
+parser_path_push :: proc(state: ^Parser_State, segment: Parser_Path_Segment) {
 	assert(state.container_path.count < len(state.container_path.segments))
 	state.container_path.segments[state.container_path.count] = segment
 	state.container_path.count += 1
 }
 
 @(private)
-parser_path_push_key :: proc(state: ^Parser_State, key: string, source: Source_Byte_Range) {
-	parser_path_push(state, parse_path_segment_for_key(key, source))
+parser_path_pop_to :: proc(state: ^Parser_State, count: int) {
+	assert(0 <= count && count <= state.container_path.count)
+	state.container_path.count = count
 }
 
 @(private)
-parser_path_pop_to :: proc(state: ^Parser_State, count: int) {
-	assert(0 <= count && count <= state.container_path.count)
-	for index in count..<state.container_path.count {
-		state.container_path.segments[index] = {}
+parser_path_snapshot_segment :: proc(
+	state: ^Parser_State,
+	segment: Parser_Path_Segment,
+) -> Parse_Diagnostic_Path_Segment {
+	switch item in segment {
+	case Source_Byte_Range:
+		return parse_path_segment_for_source(state, item)
+	case Path_Index:
+		return Parse_Diagnostic_Path_Segment(item)
 	}
-	state.container_path.count = count
+	unreachable()
 }
 
 @(private)
@@ -54,22 +57,29 @@ parser_path_snapshot :: proc(state: ^Parser_State) -> Parse_Diagnostic_Path {
 	if count <= PARSE_DIAGNOSTIC_PATH_CAPACITY {
 		result.segment_count = u8(count)
 		result.prefix_count = u8(count)
-		copy(result.segments[:count], state.container_path.segments[:count])
+		for index in 0..<count {
+			result.segments[index] = parser_path_snapshot_segment(
+				state, state.container_path.segments[index],
+			)
+		}
 		return result
 	}
 	result.segment_count = PARSE_DIAGNOSTIC_PATH_CAPACITY
 	result.prefix_count = PARSE_DIAGNOSTIC_PATH_PREFIX_COUNT
 	result.omitted_segment_count = u16(count-PARSE_DIAGNOSTIC_PATH_CAPACITY)
 	result.truncated = true
-	copy(
-		result.segments[:PARSE_DIAGNOSTIC_PATH_PREFIX_COUNT],
-		state.container_path.segments[:PARSE_DIAGNOSTIC_PATH_PREFIX_COUNT],
-	)
+	for index in 0..<PARSE_DIAGNOSTIC_PATH_PREFIX_COUNT {
+		result.segments[index] = parser_path_snapshot_segment(
+			state, state.container_path.segments[index],
+		)
+	}
 	tail_count := PARSE_DIAGNOSTIC_PATH_CAPACITY-PARSE_DIAGNOSTIC_PATH_PREFIX_COUNT
-	copy(
-		result.segments[PARSE_DIAGNOSTIC_PATH_PREFIX_COUNT:],
-		state.container_path.segments[count-tail_count:count],
-	)
+	for offset in 0..<tail_count {
+		result.segments[PARSE_DIAGNOSTIC_PATH_PREFIX_COUNT+offset] =
+			parser_path_snapshot_segment(
+				state, state.container_path.segments[count-tail_count+offset],
+			)
+	}
 	return result
 }
 
@@ -81,7 +91,7 @@ container_grammar_error :: proc(
 	start, end: int,
 ) -> Parse_Error {
 	return parse_grammar_error(
-		state, expected, found, start, end, parser_path_snapshot(state),
+		state, expected, found, start, end, .Current,
 	)
 }
 
@@ -92,7 +102,7 @@ container_limit_error :: proc(
 	start, end: int,
 ) -> Parse_Error {
 	return parse_limit_error(
-		state, kind, start, end, parser_path_snapshot(state),
+		state, kind, start, end, .Current,
 	)
 }
 
@@ -133,24 +143,35 @@ container_make_table :: proc(
 	start, end: int,
 ) -> (Table, Parse_Error) {
 	return parser_make_table(
-		state, count, start, end, CURRENT_PARSE_DIAGNOSTIC_PATH,
+		state, count, start, end, .Current,
 	)
 }
 
 @(private)
-parser_make_array :: proc(
+container_make_table_capacity :: proc(
 	state: ^Parser_State,
-	count: int,
+	count, capacity: int,
+	start, end: int,
+) -> (Table, Parse_Error) {
+	return parser_make_table_capacity(
+		state, count, capacity, start, end, .Current,
+	)
+}
+
+@(private)
+parser_make_array_capacity :: proc(
+	state: ^Parser_State,
+	count, capacity: int,
 	start, end: int,
 ) -> (Array, Parse_Error) {
-	if count < 0 || count > max(int)/size_of(Value) {
+	if count < 0 || capacity < count || capacity > max(int)/size_of(Value) {
 		return {}, container_limit_error(state, .Size_Overflow, start, end)
 	}
 	memory: rawptr
-	if count > 0 {
+	if capacity > 0 {
 		allocation_error: runtime.Allocator_Error
 		memory, allocation_error = allocator_allocate(
-			count*size_of(Value),
+			capacity*size_of(Value),
 			state.allocator,
 			true,
 			state.loc,
@@ -165,10 +186,19 @@ parser_make_array :: proc(
 	raw := runtime.Raw_Dynamic_Array{
 		data = memory,
 		len = count,
-		cap = count,
+		cap = capacity,
 		allocator = state.allocator,
 	}
 	return transmute(Array)raw, nil
+}
+
+@(private)
+parser_make_array :: proc(
+	state: ^Parser_State,
+	count: int,
+	start, end: int,
+) -> (Array, Parse_Error) {
+	return parser_make_array_capacity(state, count, count, start, end)
 }
 
 @(private)
@@ -178,17 +208,33 @@ parser_append_array_value :: proc(
 	value: ^Value,
 	start, end: int,
 ) -> Parse_Error {
-	if len(array^) == max(int) {
+	index := len(array^)
+	if index < cap(array^) {
+		raw := transmute(runtime.Raw_Dynamic_Array)array^
+		raw.len = index+1
+		array^ = transmute(Array)raw
+		array^[index] = value^
+		value^ = {}
+		return nil
+	}
+	capacity, capacity_ok := parser_growth_capacity(
+		cap(array^), index+1, size_of(Value),
+	)
+	if !capacity_ok {
 		return container_limit_error(state, .Size_Overflow, start, end)
 	}
-	replacement, err := parser_make_array(state, len(array^)+1, start, end)
+	replacement, err := parser_make_array_capacity(
+		state, index+1, capacity, start, end,
+	)
 	if err != nil {
 		return err
 	}
-	if len(array^) > 0 {
-		mem.copy_non_overlapping(raw_data(replacement), raw_data(array^), len(array^)*size_of(Value))
+	if index > 0 {
+		mem.copy_non_overlapping(
+			raw_data(replacement), raw_data(array^), index*size_of(Value),
+		)
 	}
-	replacement[len(array^)] = value^
+	replacement[index] = value^
 	value^ = {}
 	old := array^
 	array^ = replacement
@@ -204,17 +250,34 @@ parser_append_table_value :: proc(
 	value: ^Value,
 	start, end: int,
 ) -> Parse_Error {
-	if len(table^) == max(int) {
+	index := len(table^)
+	if index < cap(table^) {
+		raw := transmute(runtime.Raw_Dynamic_Array)table^
+		raw.len = index+1
+		table^ = transmute(Table)raw
+		table^[index] = {key = key^, value = value^}
+		key^ = ""
+		value^ = {}
+		return nil
+	}
+	capacity, capacity_ok := parser_growth_capacity(
+		cap(table^), index+1, size_of(Entry),
+	)
+	if !capacity_ok {
 		return container_limit_error(state, .Size_Overflow, start, end)
 	}
-	replacement, err := container_make_table(state, len(table^)+1, start, end)
+	replacement, err := container_make_table_capacity(
+		state, index+1, capacity, start, end,
+	)
 	if err != nil {
 		return err
 	}
-	if len(table^) > 0 {
-		mem.copy_non_overlapping(raw_data(replacement), raw_data(table^), len(table^)*size_of(Entry))
+	if index > 0 {
+		mem.copy_non_overlapping(
+			raw_data(replacement), raw_data(table^), index*size_of(Entry),
+		)
 	}
-	replacement[len(table^)] = {key = key^, value = value^}
+	replacement[index] = {key = key^, value = value^}
 	key^ = ""
 	value^ = {}
 	old := table^
@@ -236,14 +299,14 @@ skip_container_trivia :: proc(
 		case '\r':
 			if index+1 >= len(state.input) || state.input[index+1] != '\n' {
 				return 0, parse_lexical_error(
-					state, .Invalid_Newline, index, index+1, parser_path_snapshot(state),
+					state, .Invalid_Newline, index, index+1, .Current,
 				)
 			}
 			index += 2
 		case '#':
 			err: Parse_Error
 			index, err = validate_comment(
-				state, index, CURRENT_PARSE_DIAGNOSTIC_PATH,
+				state, index, .Current,
 			)
 			if err != nil {
 				return 0, err
@@ -255,7 +318,7 @@ skip_container_trivia :: proc(
 					.Illegal_Character,
 					index,
 					index+utf8_scalar_size_at(state.input, index),
-					parser_path_snapshot(state),
+					.Current,
 				)
 			}
 			return index, nil
@@ -354,7 +417,7 @@ parser_parse_array :: proc(
 
 	for {
 		parser_path_pop_to(state, base_path_count)
-		parser_path_push(state, Parse_Diagnostic_Path_Segment(Path_Index(len(array))))
+		parser_path_push(state, Parser_Path_Segment(Path_Index(len(array))))
 		if state.container_path.count > state.max_depth {
 			container_fail_limit(
 				state, .Maximum_Depth_Exceeded,
@@ -542,7 +605,7 @@ inline_definition_error :: proc(
 		Parse_Diagnostic_Detail(Parse_Definition_Error{kind, existing, attempted}),
 		primary.start,
 		primary.end,
-		parser_path_snapshot(state),
+		.Current,
 		Optional_Source_Range{related, true},
 	)
 }
@@ -606,8 +669,8 @@ inline_append_entry :: proc(
 container_simple_key_segment :: proc(
 	state: ^Parser_State,
 	start: int,
-) -> (end: int, key_range: Source_Byte_Range, segment: Parse_Diagnostic_Path_Segment, ok: bool) {
-	path := CURRENT_PARSE_DIAGNOSTIC_PATH
+) -> (end: int, key_range: Source_Byte_Range, segment: Parser_Path_Segment, ok: bool) {
+	path := Parser_Diagnostic_Path.Current
 	if start >= len(state.input) {
 		container_store_error(
 			state,
@@ -640,8 +703,7 @@ container_simple_key_segment :: proc(
 			end += 1
 		}
 		key_range = {start, end}
-		segment = parse_path_segment_for_key(state.input[start:end], key_range)
-		return end, key_range, segment, true
+		return end, key_range, Parser_Path_Segment(key_range), true
 	}
 
 	if start+2 < len(state.input) && state.input[start+1] == character &&
@@ -658,73 +720,14 @@ container_simple_key_segment :: proc(
 	if character == '\'' {
 		kind = .Literal
 	}
-	decoded_count: int
 	err: Parse_Error
-	end, decoded_count, err = quoted_text_scan(state, start, kind, {}, path)
+	end, _, err = quoted_text_scan(state, start, kind, {}, path)
 	if err != nil {
 		container_store_error(state, err)
 		return 0, {}, {}, false
 	}
 	key_range = {start, end}
-	key_snapshot := Parse_Diagnostic_Key{
-		decoded_byte_length = decoded_count,
-		source = key_range,
-	}
-	if decoded_count <= PARSE_DIAGNOSTIC_KEY_CAPACITY {
-		decoded: [PARSE_DIAGNOSTIC_KEY_CAPACITY]byte
-		second_end, second_count, second_error := quoted_text_scan(
-			state,
-			start,
-			kind,
-			Quoted_Text_Output{bytes = decoded[:decoded_count]},
-			path,
-		)
-		assert(second_error == nil && second_end == end && second_count == decoded_count)
-		copy(key_snapshot.bytes[:decoded_count], decoded[:decoded_count])
-		key_snapshot.prefix_length = u8(decoded_count)
-	} else {
-		// Four-byte UTF-8 scalars need at most three bytes beyond either
-		// 32-byte diagnostic boundary to find the longest complete prefix/suffix.
-		DIAGNOSTIC_WINDOW :: PARSE_DIAGNOSTIC_KEY_PREFIX_BYTES+3
-		prefix: [DIAGNOSTIC_WINDOW]byte
-		suffix: [DIAGNOSTIC_WINDOW]byte
-		prefix_end, prefix_count, prefix_error := quoted_text_scan(
-			state,
-			start,
-			kind,
-			Quoted_Text_Output{bytes = prefix[:]},
-			path,
-		)
-		suffix_end, suffix_count, suffix_error := quoted_text_scan(
-			state,
-			start,
-			kind,
-			Quoted_Text_Output{
-				bytes = suffix[:],
-				start = decoded_count-DIAGNOSTIC_WINDOW,
-			},
-			path,
-		)
-		assert(prefix_error == nil && suffix_error == nil)
-		assert(prefix_end == end && suffix_end == end)
-		assert(prefix_count == decoded_count && suffix_count == decoded_count)
-		prefix_length := utf8_prefix_length(string(prefix[:]), PARSE_DIAGNOSTIC_KEY_PREFIX_BYTES)
-		suffix_start := utf8_suffix_start(
-			string(suffix[:]),
-			DIAGNOSTIC_WINDOW-(PARSE_DIAGNOSTIC_KEY_CAPACITY-PARSE_DIAGNOSTIC_KEY_PREFIX_BYTES),
-		)
-		suffix_length := DIAGNOSTIC_WINDOW-suffix_start
-		copy(key_snapshot.bytes[:prefix_length], prefix[:prefix_length])
-		copy(
-			key_snapshot.bytes[prefix_length:prefix_length+suffix_length],
-			suffix[suffix_start:],
-		)
-		key_snapshot.prefix_length = u8(prefix_length)
-		key_snapshot.suffix_length = u8(suffix_length)
-		key_snapshot.omitted_byte_count = decoded_count-prefix_length-suffix_length
-		key_snapshot.truncated = true
-	}
-	return end, key_range, Parse_Diagnostic_Path_Segment(key_snapshot), true
+	return end, key_range, Parser_Path_Segment(key_range), true
 }
 
 @(private)
@@ -733,7 +736,7 @@ container_try_simple_key :: proc(
 	start: int,
 ) -> (string, int, Source_Byte_Range, bool) {
 	key, end, key_range, err := parse_simple_key(
-		state, start, CURRENT_PARSE_DIAGNOSTIC_PATH,
+		state, start, .Current,
 	)
 	if err != nil {
 		container_store_error(state, err)
@@ -1081,7 +1084,7 @@ parser_parse_leaf_value :: proc(
 		text: string
 		err: Parse_Error
 		text, end, err = parser_owned_text(
-			state, start, kind, CURRENT_PARSE_DIAGNOSTIC_PATH,
+			state, start, kind, .Current,
 		)
 		if err != nil {
 			container_store_error(state, err)
@@ -1095,7 +1098,7 @@ parser_parse_leaf_value :: proc(
 	}
 	err: Parse_Error
 	end, err = scan_scalar_candidate(
-		state, start, CURRENT_PARSE_DIAGNOSTIC_PATH, ctx,
+		state, start, .Current, ctx,
 	)
 	if err != nil {
 		container_store_error(state, err)
@@ -1105,13 +1108,13 @@ parser_parse_leaf_value :: proc(
 		container_store_error(
 			state,
 			parse_value_error(
-				state, .Invalid_Value, start, start+1, parser_path_snapshot(state),
+				state, .Invalid_Value, start, start+1, .Current,
 			),
 		)
 		return {}, 0, .Key_Value, false
 	}
 	value, err = parse_scalar_candidate(
-		state, start, end, CURRENT_PARSE_DIAGNOSTIC_PATH,
+		state, start, end, .Current,
 	)
 	if err != nil {
 		container_store_error(state, err)

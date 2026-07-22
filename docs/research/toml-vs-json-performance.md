@@ -56,21 +56,23 @@ of 50,000 operations per format, produced these medians of invocation medians:
 
 | Format | Input | Median time | Throughput | Relative to JSON |
 | --- | ---: | ---: | ---: | ---: |
-| JSON | 509 B | 5.50 us/op | 88.3 MiB/s | 1.00x |
-| INI | 436 B | 3.96 us/op | 105.0 MiB/s | 0.72x |
-| TOML | 478 B | 32.91 us/op | 13.85 MiB/s | 5.99x |
+| JSON | 509 B | 5.56 us/op | 87.3 MiB/s | 1.00x |
+| INI | 436 B | 4.06 us/op | 102.4 MiB/s | 0.73x |
+| TOML | 478 B | 27.80 us/op | 16.40 MiB/s | 5.00x |
 
 The pre-optimization observation from the same harness was 71.96 us/op for TOML
 and 5.45 us/op for JSON, or 13.20x. The parser work therefore reduced the full
-TOML integration time by about 54.3% and the measured TOML/JSON ratio from 13.20x
-to 5.99x. JSON timing remained effectively unchanged.
+TOML integration time by about 61.4% and the measured TOML/JSON ratio from 13.20x
+to 5.00x. JSON timing remained effectively unchanged. The split measurement
+attributed 21.87 us/op to semantic parse.
 
 A forwarding allocator around one complete integration operation observed 5
-allocation requests for JSON and 82 for TOML. Requested-byte totals were 131,464
-for JSON and 76,224 for TOML, but those byte totals reflect different dynamic
-arena growth strategies and are not peak live-byte measurements.
+allocation requests for JSON and 76 for TOML. Requested-byte totals were 131,464
+for JSON and 75,456 for TOML, but those byte totals reflect different dynamic
+arena growth strategies and are not peak live-byte measurements. Semantic parse
+issued 73 requests totaling 9,592 requested bytes.
 
-The updated 5.99x ratio is still above the published Rust 1.9--3.6x points. It is
+The updated 5.00x ratio is still above the published Rust 1.9--3.6x points. It is
 an integration comparison, not tokenization alone: both sides include generic
 DOM creation, conversion into `odin_config`, and owner destruction. The inputs
 represent identical logical values but are not byte-identical.

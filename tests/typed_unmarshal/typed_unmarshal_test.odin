@@ -151,6 +151,77 @@ Scalar_Destination :: struct {
 	ignored: string `toml:"-"`,
 }
 
+Range_Growth_Destination :: struct {
+	f0, f1, f2, f3, f4, f5, f6, f7, f8: i64,
+	f9, f10, f11, f12, f13, f14, f15, f16: i64,
+}
+
+Range_Growth_Array_Destination :: struct {
+	values: [17]i8,
+}
+
+@(test)
+unmarshal_grows_parser_binding_ranges_geometrically :: proc(t: ^testing.T) {
+	events: [128]test_support.Allocator_Event
+	live: [64]test_support.Live_Allocation
+	observed: test_support.Observed_Allocator
+	test_support.observed_allocator_init(
+		&observed, context.allocator, events[:], live[:],
+	)
+	destination: Range_Growth_Destination
+	err := toml.unmarshal_string(
+		`f0=0
+f1=1
+f2=2
+f3=3
+f4=4
+f5=5
+f6=6
+f7=7
+f8=8
+f9=9
+f10=10
+f11=11
+f12=12
+f13=13
+f14=14
+f15=15
+f16=16
+`,
+		&destination,
+		allocator = test_support.observed_allocator(&observed),
+	)
+	testing.expect(t, err == nil)
+	testing.expect_value(t, destination.f16, i64(16))
+	// Seventeen keys, six growth allocations for each parser buffer, and two
+	// typed-binding plan allocations. Exact-growth ranges would add eleven calls.
+	testing.expect(t, observed.allocation_request_count <= 37)
+	testing.expect_value(t, observed.live_count, 0)
+	testing.expect_value(t, observed.foreign_release_count, 0)
+
+	range_destination: Range_Growth_Array_Destination
+	range_error := toml.unmarshal_string(
+		"values = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 128]\n",
+		&range_destination,
+	)
+	diagnostic, diagnostic_ok := range_error.(toml.Unmarshal_Diagnostic)
+	testing.expect(t, diagnostic_ok)
+	if diagnostic_ok {
+		data, data_ok := diagnostic.detail.(toml.Unmarshal_Data_Error)
+		testing.expect(t, data_ok)
+		if data_ok {
+			testing.expect_value(
+				t, data.kind, toml.Unmarshal_Data_Error_Kind.Integer_Out_Of_Range,
+			)
+		}
+		testing.expect(t, diagnostic.source.ok)
+		if diagnostic.source.ok {
+			testing.expect_value(t, diagnostic.source.value.start.byte, 64)
+			testing.expect_value(t, diagnostic.source.value.end.byte, 67)
+		}
+	}
+}
+
 @(test)
 unmarshal_installs_owning_containers_and_wrappers_with_selected_allocator :: proc(t: ^testing.T) {
 	events: [512]test_support.Allocator_Event

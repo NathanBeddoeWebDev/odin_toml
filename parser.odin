@@ -28,9 +28,11 @@ Parser_State :: struct {
 	loc:             runtime.Source_Code_Location,
 }
 
-// This impossible public path shape defers the current-path snapshot until an error exists.
 @(private)
-CURRENT_PARSE_DIAGNOSTIC_PATH :: Parse_Diagnostic_Path{truncated = true}
+Parser_Diagnostic_Path :: enum u8 {
+	Root,
+	Current,
+}
 
 @(private)
 Quoted_Text_Kind :: enum u8 {
@@ -89,11 +91,11 @@ parse_diagnostic :: proc(
 	state: ^Parser_State,
 	detail: Parse_Diagnostic_Detail,
 	start, end: int,
-	path: Parse_Diagnostic_Path = {},
+	path: Parser_Diagnostic_Path = .Root,
 	related: Optional_Source_Range = {},
 ) -> Parse_Error {
-	resolved_path := path
-	if resolved_path.truncated && resolved_path.total_segment_count == 0 {
+	resolved_path: Parse_Diagnostic_Path
+	if path == .Current {
 		resolved_path = parser_path_snapshot(state)
 	}
 	return Parse_Diagnostic{
@@ -109,7 +111,7 @@ parse_lexical_error :: proc(
 	state: ^Parser_State,
 	kind: Parse_Lexical_Error,
 	start, end: int,
-	path: Parse_Diagnostic_Path = {},
+	path: Parser_Diagnostic_Path = .Root,
 ) -> Parse_Error {
 	return parse_diagnostic(
 		state,
@@ -125,7 +127,7 @@ parse_value_error :: proc(
 	state: ^Parser_State,
 	kind: Parse_Value_Error_Kind,
 	start, end: int,
-	path: Parse_Diagnostic_Path,
+	path: Parser_Diagnostic_Path,
 	temporal_error: temporal.Error = .None,
 ) -> Parse_Error {
 	return parse_diagnostic(
@@ -146,7 +148,7 @@ parse_grammar_error :: proc(
 	expected: Parse_Syntax_Set,
 	found: Parse_Syntax,
 	start, end: int,
-	path: Parse_Diagnostic_Path = {},
+	path: Parser_Diagnostic_Path = .Root,
 ) -> Parse_Error {
 	return parse_diagnostic(
 		state,
@@ -162,7 +164,7 @@ parse_limit_error :: proc(
 	state: ^Parser_State,
 	kind: Parse_Limit_Error,
 	start, end: int,
-	path: Parse_Diagnostic_Path,
+	path: Parser_Diagnostic_Path,
 ) -> Parse_Error {
 	return parse_diagnostic(
 		state,
@@ -347,7 +349,7 @@ quoted_text_scan :: proc(
 	start: int,
 	kind: Quoted_Text_Kind,
 	output: Quoted_Text_Output,
-	path: Parse_Diagnostic_Path,
+	path: Parser_Diagnostic_Path,
 ) -> (end, output_count: int, err: Parse_Error) {
 	multiline := kind == .Multiline_Basic || kind == .Multiline_Literal
 	basic := kind == .Basic || kind == .Multiline_Basic
@@ -583,7 +585,7 @@ parser_owned_text :: proc(
 	state: ^Parser_State,
 	start: int,
 	kind: Quoted_Text_Kind,
-	path: Parse_Diagnostic_Path,
+	path: Parser_Diagnostic_Path,
 ) -> (text: string, end: int, err: Parse_Error) {
 	count: int
 	end, count, err = quoted_text_scan(state, start, kind, {}, path)
@@ -685,10 +687,99 @@ parse_path_segment_for_key :: proc(
 }
 
 @(private)
+parse_path_segment_for_source :: proc(
+	state: ^Parser_State,
+	key_source: Source_Byte_Range,
+) -> Parse_Diagnostic_Path_Segment {
+	assert(0 <= key_source.start && key_source.start < key_source.end)
+	assert(key_source.end <= len(state.input))
+	character := state.input[key_source.start]
+	if character != '"' && character != '\'' {
+		return parse_path_segment_for_key(
+			state.input[key_source.start:key_source.end], key_source,
+		)
+	}
+
+	kind := Quoted_Text_Kind.Basic
+	if character == '\'' {
+		kind = .Literal
+	}
+	decoded_count, end: int
+	err: Parse_Error
+	end, decoded_count, err = quoted_text_scan(
+		state, key_source.start, kind, {}, .Root,
+	)
+	assert(err == nil && end == key_source.end)
+	key_snapshot := Parse_Diagnostic_Key{
+		decoded_byte_length = decoded_count,
+		source = key_source,
+	}
+	if decoded_count <= PARSE_DIAGNOSTIC_KEY_CAPACITY {
+		decoded: [PARSE_DIAGNOSTIC_KEY_CAPACITY]byte
+		second_end, second_count, second_error := quoted_text_scan(
+			state,
+			key_source.start,
+			kind,
+			Quoted_Text_Output{bytes = decoded[:decoded_count]},
+			.Root,
+		)
+		assert(second_error == nil && second_end == end && second_count == decoded_count)
+		copy(key_snapshot.bytes[:decoded_count], decoded[:decoded_count])
+		key_snapshot.prefix_length = u8(decoded_count)
+	} else {
+		// Four-byte UTF-8 scalars need at most three bytes beyond either
+		// 32-byte diagnostic boundary to find the longest complete prefix/suffix.
+		DIAGNOSTIC_WINDOW :: PARSE_DIAGNOSTIC_KEY_PREFIX_BYTES+3
+		prefix: [DIAGNOSTIC_WINDOW]byte
+		suffix: [DIAGNOSTIC_WINDOW]byte
+		prefix_end, prefix_count, prefix_error := quoted_text_scan(
+			state,
+			key_source.start,
+			kind,
+			Quoted_Text_Output{bytes = prefix[:]},
+			.Root,
+		)
+		suffix_end, suffix_count, suffix_error := quoted_text_scan(
+			state,
+			key_source.start,
+			kind,
+			Quoted_Text_Output{
+				bytes = suffix[:],
+				start = decoded_count-DIAGNOSTIC_WINDOW,
+			},
+			.Root,
+		)
+		assert(prefix_error == nil && suffix_error == nil)
+		assert(prefix_end == end && suffix_end == end)
+		assert(prefix_count == decoded_count && suffix_count == decoded_count)
+		prefix_length := utf8_prefix_length(
+			string(prefix[:]), PARSE_DIAGNOSTIC_KEY_PREFIX_BYTES,
+		)
+		suffix_start := utf8_suffix_start(
+			string(suffix[:]),
+			DIAGNOSTIC_WINDOW-(
+				PARSE_DIAGNOSTIC_KEY_CAPACITY-PARSE_DIAGNOSTIC_KEY_PREFIX_BYTES
+			),
+		)
+		suffix_length := DIAGNOSTIC_WINDOW-suffix_start
+		copy(key_snapshot.bytes[:prefix_length], prefix[:prefix_length])
+		copy(
+			key_snapshot.bytes[prefix_length:prefix_length+suffix_length],
+			suffix[suffix_start:],
+		)
+		key_snapshot.prefix_length = u8(prefix_length)
+		key_snapshot.suffix_length = u8(suffix_length)
+		key_snapshot.omitted_byte_count = decoded_count-prefix_length-suffix_length
+		key_snapshot.truncated = true
+	}
+	return Parse_Diagnostic_Path_Segment(key_snapshot)
+}
+
+@(private)
 parse_simple_key :: proc(
 	state: ^Parser_State,
 	start: int,
-	path: Parse_Diagnostic_Path = {},
+	path: Parser_Diagnostic_Path = .Root,
 ) -> (key: string, end: int, key_range: Source_Byte_Range, err: Parse_Error) {
 	if start >= len(state.input) {
 		return "", 0, {}, parse_grammar_error(
@@ -753,20 +844,42 @@ release_owned_text :: proc(state: ^Parser_State, text: ^string) {
 }
 
 @(private)
-parser_make_table :: proc(
+parser_growth_capacity :: proc(
+	current, required, element_size: int,
+) -> (capacity: int, ok: bool) {
+	if current < 0 || required < 0 || element_size <= 0 {
+		return 0, false
+	}
+	maximum := max(int)/element_size
+	if required > maximum {
+		return 0, false
+	}
+	capacity = max(1, current)
+	for capacity < required {
+		if capacity > maximum/2 {
+			capacity = maximum
+		} else {
+			capacity *= 2
+		}
+	}
+	return capacity, true
+}
+
+@(private)
+parser_make_table_capacity :: proc(
 	state: ^Parser_State,
-	count: int,
+	count, capacity: int,
 	start, end: int,
-	path: Parse_Diagnostic_Path,
+	path: Parser_Diagnostic_Path,
 ) -> (Table, Parse_Error) {
-	if count < 0 || count > max(int)/size_of(Entry) {
+	if count < 0 || capacity < count || capacity > max(int)/size_of(Entry) {
 		return {}, parse_limit_error(state, .Size_Overflow, start, end, path)
 	}
 	memory: rawptr
-	if count > 0 {
+	if capacity > 0 {
 		allocation_error: runtime.Allocator_Error
 		memory, allocation_error = allocator_allocate(
-			count*size_of(Entry),
+			capacity*size_of(Entry),
 			state.allocator,
 			true,
 			state.loc,
@@ -781,10 +894,20 @@ parser_make_table :: proc(
 	raw := runtime.Raw_Dynamic_Array{
 		data = memory,
 		len = count,
-		cap = count,
+		cap = capacity,
 		allocator = state.allocator,
 	}
 	return transmute(Table)raw, nil
+}
+
+@(private)
+parser_make_table :: proc(
+	state: ^Parser_State,
+	count: int,
+	start, end: int,
+	path: Parser_Diagnostic_Path,
+) -> (Table, Parse_Error) {
+	return parser_make_table_capacity(state, count, count, start, end, path)
 }
 
 @(private)
@@ -815,7 +938,7 @@ string_has_prefix :: proc(text, prefix: string) -> bool {
 scan_scalar_candidate :: proc(
 	state: ^Parser_State,
 	start: int,
-	path: Parse_Diagnostic_Path,
+	path: Parser_Diagnostic_Path,
 	ctx: Parser_Value_Context = .Document,
 ) -> (int, Parse_Error) {
 	index := start
@@ -1240,7 +1363,7 @@ big_error_is_allocator_error :: proc(err: big.Error) -> bool {
 parse_scalar_candidate :: proc(
 	state: ^Parser_State,
 	start, end: int,
-	path: Parse_Diagnostic_Path,
+	path: Parser_Diagnostic_Path,
 ) -> (Value, Parse_Error) {
 	text := state.input[start:end]
 	if string_has_prefix(text, "true") || string_has_prefix(text, "false") {
@@ -1419,7 +1542,7 @@ skip_horizontal_whitespace :: proc(input: string, start: int) -> int {
 validate_comment :: proc(
 	state: ^Parser_State,
 	start: int,
-	path: Parse_Diagnostic_Path = {},
+	path: Parser_Diagnostic_Path = .Root,
 ) -> (int, Parse_Error) {
 	index := start+1
 	for index < len(state.input) && state.input[index] != '\n' && state.input[index] != '\r' {
@@ -1480,7 +1603,7 @@ parse_document_internal :: proc(
 		capture_binding_ranges = retained_ranges != nil,
 	}
 	root_error: Parse_Error
-	state.root, root_error = parser_make_table(&state, 0, 0, 0, {})
+	state.root, root_error = parser_make_table(&state, 0, 0, 0, .Root)
 	if root_error != nil {
 		return {}, root_error
 	}

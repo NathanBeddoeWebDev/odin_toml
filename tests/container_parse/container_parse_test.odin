@@ -96,6 +96,33 @@ test_arrays_preserve_heterogeneous_order_and_nested_multiline_values :: proc(t: 
 }
 
 @(test)
+test_parser_grows_semantic_array_storage_geometrically :: proc(t: ^testing.T) {
+	events: [64]test_support.Allocator_Event
+	live: [32]test_support.Live_Allocation
+	observed: test_support.Observed_Allocator
+	test_support.observed_allocator_init(
+		&observed, context.allocator, events[:], live[:],
+	)
+	doc, err := toml.parse_string(
+		"values = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]\n",
+		allocator = test_support.observed_allocator(&observed),
+	)
+	testing.expect(t, err == nil)
+	if err != nil {
+		return
+	}
+	values, values_ok := doc.root[0].value.(toml.Array)
+	testing.expect(t, values_ok)
+	testing.expect_value(t, len(values), 17)
+	testing.expect_value(t, cap(values), 32)
+	// One key, one root table, one parser-node buffer, and six array buffers.
+	testing.expect(t, observed.allocation_request_count <= 9)
+	toml.destroy_document(&doc)
+	testing.expect_value(t, observed.live_count, 0)
+	testing.expect_value(t, observed.foreign_release_count, 0)
+}
+
+@(test)
 test_arrays_accept_every_toml_value_kind :: proc(t: ^testing.T) {
 	doc, err := toml.parse_string(
 		`v = ["s", 1, 1.5, true, 1979-05-27T07:32Z, 1979-05-27T07:32, 1979-05-27, 07:32, [], {}]

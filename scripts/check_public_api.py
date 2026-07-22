@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reject drift from the approved public TOML and temporal declarations."""
+"""Reject drift from the approved public TOML declarations."""
 
 from __future__ import annotations
 
@@ -13,7 +13,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGES = {
     "toml": (ROOT, ROOT / "api" / "toml.public-api"),
-    "temporal": (ROOT / "temporal", ROOT / "api" / "temporal.public-api"),
 }
 REQUIRE_RESULTS = {
     "toml": {
@@ -33,26 +32,6 @@ REQUIRE_RESULTS = {
         "unmarshal_string",
         "unparse",
         "unparse_to_writer",
-    },
-    "temporal": {
-        "compare_instant",
-        "compare_local_date",
-        "compare_local_date_time",
-        "compare_local_time",
-        "local_date_from_datetime",
-        "local_date_time_from_datetime",
-        "local_date_time_to_datetime",
-        "local_date_to_datetime",
-        "local_time_from_datetime",
-        "local_time_to_datetime",
-        "offset_date_time_from_time",
-        "offset_date_time_from_time_utc",
-        "offset_date_time_to_time",
-        "validate_local_date",
-        "validate_local_date_time",
-        "validate_local_time",
-        "validate_offset_date_time",
-        "validate_utc_offset",
     },
 }
 SOURCE_LOCATION = re.compile(r" /\* \d+!\d+ \*/")
@@ -104,9 +83,6 @@ def check_runtime_dependencies() -> list[str]:
                 if marker in lowered:
                     failures.append(f"{path.relative_to(ROOT)} contains forbidden runtime marker {marker!r}")
 
-    temporal_source = "\n".join(path.read_text() for path in sorted((ROOT / "temporal").glob("*.odin")))
-    if re.search(r'^\s*import(?:\s+\w+)?\s+"(?:\.\./)?toml"', temporal_source, re.MULTILINE):
-        failures.append("temporal must not import toml")
 
     with tempfile.TemporaryDirectory(prefix="odin-toml-deps-") as temporary:
         dependency_file = Path(temporary) / "dependencies.json"

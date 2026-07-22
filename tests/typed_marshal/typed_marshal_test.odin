@@ -5,7 +5,7 @@ import "core:io"
 import "core:mem"
 import "core:testing"
 import toml "../.."
-import temporal "../../temporal"
+import temporal "../../vendor/temporal"
 import test_support "../support"
 
 Named_String :: distinct string

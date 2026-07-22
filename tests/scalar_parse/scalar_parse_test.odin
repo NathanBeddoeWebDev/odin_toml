@@ -5,7 +5,7 @@ import "core:math"
 import "core:mem"
 import "core:testing"
 import toml "../.."
-import temporal "../../temporal"
+import temporal "../../vendor/temporal"
 import test_support "../support"
 
 value_for :: proc(t: ^testing.T, doc: ^toml.Document, key: string) -> ^toml.Value {

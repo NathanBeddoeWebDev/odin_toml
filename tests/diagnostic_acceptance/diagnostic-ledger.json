@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "scope": "Every public error union alternative, diagnostic-detail union alternative, error/detail enum member, Parse_Syntax category, and Parse_Definition_Form in errors.odin; the public Codec_Callback_Error in codecs.odin; and every temporal.Error alternative in temporal/types.odin. Covered rows name public package-seam tests; inapplicable rows give construction proofs.",
+  "scope": "Every public error union alternative, diagnostic-detail union alternative, error/detail enum member, Parse_Syntax category, and Parse_Definition_Form in errors.odin; the public Codec_Callback_Error in codecs.odin; and every temporal.Error alternative in vendor/temporal/types.odin. Covered rows name public package-seam tests; inapplicable rows give construction proofs.",
   "entries": [
     {
       "id": "Parse_Configuration_Error.Invalid_Allocator",

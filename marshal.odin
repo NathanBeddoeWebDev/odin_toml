@@ -4,7 +4,7 @@ import "base:runtime"
 import "core:io"
 import "core:mem"
 import "core:unicode/utf8"
-import temporal "temporal"
+import temporal "vendor/temporal"
 
 @(private)
 Marshal_Builder :: struct {

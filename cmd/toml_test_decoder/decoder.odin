@@ -3,7 +3,7 @@ package main
 import "core:io"
 import "core:strconv"
 import toml "../.."
-import temporal "../../temporal"
+import temporal "../../vendor/temporal"
 
 Adapter_Error_Kind :: enum u8 {
 	Malformed_Input,

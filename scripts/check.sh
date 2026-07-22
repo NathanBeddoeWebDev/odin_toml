@@ -98,7 +98,7 @@ queue_odin_test() {
 }
 
 odin check . -no-entry-point "${common[@]}"
-odin check temporal -no-entry-point "${common[@]}"
+odin check vendor/temporal -no-entry-point "${common[@]}"
 for target in linux_amd64 linux_arm64 darwin_amd64 darwin_arm64 windows_amd64; do
   odin check . -no-entry-point "-target:$target" "${common[@]}"
 done

@@ -3,7 +3,7 @@ package rtti_probe
 import "base:runtime"
 import "core:mem"
 import "core:reflect"
-import "../../temporal"
+import "../../vendor/temporal"
 import support "../support"
 
 Embedded :: struct {

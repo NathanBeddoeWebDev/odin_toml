@@ -3,7 +3,7 @@ package temporal_test
 import "core:testing"
 import "core:time"
 import "core:time/datetime"
-import temporal "../../temporal"
+import temporal "../../vendor/temporal"
 import test_support "../support"
 
 @(test)

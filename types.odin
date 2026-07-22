@@ -1,7 +1,7 @@
 package toml
 
 import "core:mem"
-import temporal "temporal"
+import temporal "vendor/temporal"
 
 Integer :: i64
 Float   :: f64

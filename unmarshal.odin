@@ -2,7 +2,7 @@ package toml
 
 import "base:runtime"
 import "core:reflect"
-import temporal "temporal"
+import temporal "vendor/temporal"
 
 @(private)
 Unmarshal_Source :: struct {

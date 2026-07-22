@@ -4,7 +4,7 @@ import "base:runtime"
 import "core:mem"
 import "core:reflect"
 import "core:unicode/utf8"
-import temporal "temporal"
+import temporal "vendor/temporal"
 
 @(private)
 SEMANTIC_MAX_DEPTH :: 256

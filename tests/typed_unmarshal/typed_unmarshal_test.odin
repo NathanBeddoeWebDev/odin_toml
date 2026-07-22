@@ -6,7 +6,7 @@ import "core:mem"
 import "core:strings"
 import "core:testing"
 import toml "../.."
-import temporal "../../temporal"
+import temporal "../../vendor/temporal"
 import test_support "../support"
 
 Named_Bool :: distinct bool

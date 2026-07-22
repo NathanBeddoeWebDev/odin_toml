@@ -1,6 +1,6 @@
 # TOML adversarial test support
 
-This package is test-only. Runtime `toml` and `temporal` sources must not import it; the public API check rejects that dependency.
+This package is test-only. Runtime `toml` and vendored `temporal` sources must not import it; the public API check rejects that dependency.
 
 ## Allocators
 

@@ -20,7 +20,7 @@
 - **Unknown field**: A decoded table key for which a projected destination struct has no effective field name; maps do not have unknown fields.
 - **Strict TOML**: Acceptance of exactly TOML 1.1 syntax and semantics, with duplicate definitions and nonstandard extensions rejected.
 - **Table definition state**: Transient source-interpretation history distinguishing implicit, header-defined, dotted-defined, inline-sealed, and array-of-tables paths; it determines whether later definitions are legal but is not part of the semantic document tree.
-- **Temporal package**: The reusable sibling package that owns validated civil and fixed-offset temporal values and operations without parsing or formatting TOML text.
+- **Temporal package**: The reusable vendored git package that owns validated civil and fixed-offset temporal values and operations without parsing or formatting TOML text.
 - **Local temporal value**: A date, time, or date-time whose value intentionally contains no UTC offset or timezone; “local” never means the machine’s current timezone.
 - **Unknown offset**: The offset state represented by RFC 3339 `-00:00`, distinct from a known zero UTC offset and preserved without timezone inference.
 - **Codec registry**: A caller-owned, per-call mapping from an exact Odin `typeid` to directional typed-binding callbacks; it is borrowed during a TOML operation and owns only its lookup storage, never callback state.

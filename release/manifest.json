@@ -69,7 +69,7 @@
     "external-consumers-documentation"
   ],
   "acceptance_gate_sources": {
-    "strict-cross-target-typecheck": ["scripts/check.sh", "api/toml.public-api", "api/temporal.public-api"],
+    "strict-cross-target-typecheck": ["scripts/check.sh", "api/toml.public-api", "vendor/temporal/api/temporal.public-api"],
     "official-conformance": ["scripts/check_toml_test_decoder.sh", "scripts/check_toml_test_encoder.sh", "tests/corpus/toml-test-decoder-report.json", "tests/corpus/toml-test-encoder-report.json"],
     "focused-parser-temporal": ["tests/scalar_parse", "tests/container_parse", "tests/table_parse", "tests/temporal"],
     "diagnostics": ["tests/diagnostic_acceptance", "tests/diagnostic_acceptance/diagnostic-ledger.json"],
@@ -191,7 +191,7 @@
     "tests/corpus/toml-test-encoder-report.json",
     "tests/diagnostic_acceptance/diagnostic-ledger.json",
     "api/toml.public-api",
-    "api/temporal.public-api",
+    "vendor/temporal/api/temporal.public-api",
     "tests/release_bundle/test_assemble_release_bundle.py",
     "scripts/check.sh",
     "scripts/run_public_suite.sh",

@@ -5,7 +5,7 @@ import "core:mem"
 import "core:reflect"
 import "core:testing"
 import toml "../.."
-import temporal "../../temporal"
+import temporal "../../vendor/temporal"
 import test_support "../support"
 
 expect_zero_parse_related :: proc(t: ^testing.T, related: toml.Optional_Source_Range) {

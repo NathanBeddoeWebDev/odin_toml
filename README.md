@@ -1,15 +1,21 @@
 # odin_toml
 
-Standalone Odin packages for strict TOML 1.1 documents and allocation-free temporal values.
+A standalone Odin package for strict TOML 1.1 documents, with an allocation-free temporal dependency.
 
 The package accepts no permissive, recovery, legacy, or extension mode. Public declarations, ownership behavior, canonical bytes, and diagnostics are frozen against the pinned Reference Odin compiler.
 
 ## Packages
 
 - Repository root: package `toml`
-- [`temporal/`](temporal): package `temporal`
+- [`vendor/temporal/`](vendor/temporal): package `temporal`, a git submodule backed by the sibling [`odin_temporal`](../odin_temporal) repository
 
-`toml` imports `temporal`; `temporal` does not import `toml`. External consumers can use a relative import or map the repository into an Odin collection.
+Initialize the dependency after cloning:
+
+```sh
+git submodule update --init --recursive
+```
+
+`toml` imports the vendored `temporal` package; `temporal` does not import `toml`. External consumers can use a relative import or map the repository into an Odin collection.
 
 ## Consumer contract
 

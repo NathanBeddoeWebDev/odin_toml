@@ -1,0 +1,3 @@
+[submodule "vendor/temporal"]
+	path = vendor/temporal
+	url = git@github.com:NathanBeddoeWebDev/odin_temporal.git

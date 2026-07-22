@@ -6,7 +6,7 @@ import "core:mem"
 import "core:testing"
 import "core:thread"
 import toml "../.."
-import temporal "../../temporal"
+import temporal "../../vendor/temporal"
 import test_support "../support"
 
 Codec_Named_Integer :: distinct i32

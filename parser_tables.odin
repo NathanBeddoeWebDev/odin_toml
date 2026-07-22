@@ -10,17 +10,158 @@ Parser_Node_Location :: enum u8 {
 }
 
 @(private)
+Binding_Range_Node :: struct {
+	parent:         int,
+	semantic_index: int,
+	key_source:     Source_Range,
+	source:         Source_Range,
+}
+
+@(private)
+Binding_Range_Node_Array :: distinct [dynamic]Binding_Range_Node
+
+@(private)
 Parser_Node :: struct {
 	parent:            int,
 	semantic_index:    int,
 	location:          Parser_Node_Location,
 	form:              Parse_Definition_Form,
 	definition_range:  Source_Range,
+	key_range:         Source_Range,
+	value_range:       Source_Range,
+	binding_range_id:  int,
 	latest_element_id: int,
 }
 
 @(private)
 Parser_Node_Array :: distinct [dynamic]Parser_Node
+
+@(private)
+parser_make_binding_ranges :: proc(
+	state: ^Parser_State,
+	count, start, end: int,
+) -> (Binding_Range_Node_Array, Parse_Error) {
+	if count < 0 || count > max(int)/size_of(Binding_Range_Node) {
+		return {}, parse_limit_error(
+			state, .Size_Overflow, start, end, parser_path_snapshot(state),
+		)
+	}
+	memory: rawptr
+	if count > 0 {
+		allocation_error: runtime.Allocator_Error
+		memory, allocation_error = allocator_allocate(
+			count*size_of(Binding_Range_Node), state.allocator, true, state.loc,
+		)
+		if allocation_error != nil {
+			return {}, allocation_error
+		}
+		if memory == nil {
+			return {}, runtime.Allocator_Error.Out_Of_Memory
+		}
+	}
+	raw := runtime.Raw_Dynamic_Array{memory, count, count, state.allocator}
+	return transmute(Binding_Range_Node_Array)raw, nil
+}
+
+@(private)
+parser_append_binding_range :: proc(
+	state: ^Parser_State,
+	source: Source_Range,
+	start, end: int,
+) -> (int, Parse_Error) {
+	if !state.capture_binding_ranges {
+		return 0, nil
+	}
+	replacement, err := parser_make_binding_ranges(
+		state, len(state.binding_ranges)+1, start, end,
+	)
+	if err != nil {
+		return 0, err
+	}
+	if len(state.binding_ranges) > 0 {
+		mem.copy_non_overlapping(
+			raw_data(replacement),
+			raw_data(state.binding_ranges),
+			len(state.binding_ranges)*size_of(Binding_Range_Node),
+		)
+	}
+	replacement[len(state.binding_ranges)].key_source = source
+	replacement[len(state.binding_ranges)].source = source
+	old := state.binding_ranges
+	state.binding_ranges = replacement
+	release_owned_memory(
+		&state.gate,
+		raw_data(old),
+		cap(old)*size_of(Binding_Range_Node),
+		state.loc,
+	)
+	return len(state.binding_ranges), nil
+}
+
+@(private)
+parser_binding_range_attach :: proc(
+	state: ^Parser_State,
+	range_id, parent, semantic_index: int,
+) {
+	if range_id == 0 {
+		return
+	}
+	assert(0 < range_id && range_id <= len(state.binding_ranges))
+	state.binding_ranges[range_id-1].parent = parent
+	state.binding_ranges[range_id-1].semantic_index = semantic_index
+}
+
+@(private)
+parser_binding_range_set_key_source :: proc(
+	state: ^Parser_State,
+	range_id: int,
+	source: Source_Range,
+) {
+	if range_id == 0 {
+		return
+	}
+	assert(0 < range_id && range_id <= len(state.binding_ranges))
+	state.binding_ranges[range_id-1].key_source = source
+}
+
+@(private)
+parser_binding_range_finish :: proc(
+	state: ^Parser_State,
+	range_id, start, end: int,
+) {
+	if range_id == 0 {
+		return
+	}
+	assert(0 < range_id && range_id <= len(state.binding_ranges))
+	state.binding_ranges[range_id-1].source = source_range(state.input, start, end)
+}
+
+@(private)
+parser_capture_value_range :: proc(
+	state: ^Parser_State,
+	start, end: int,
+) -> bool {
+	range_id, err := parser_append_binding_range(
+		state, source_range(state.input, start, end), start, end,
+	)
+	if err != nil {
+		container_store_error(state, err)
+		return false
+	}
+	state.last_binding_range_id = range_id
+	return true
+}
+
+@(private)
+parser_release_binding_ranges :: proc(state: ^Parser_State) {
+	release_owned_memory(
+		&state.gate,
+		raw_data(state.binding_ranges),
+		cap(state.binding_ranges)*size_of(Binding_Range_Node),
+		state.loc,
+	)
+	state.binding_ranges = {}
+}
 
 @(private)
 parser_make_nodes :: proc(
@@ -169,6 +310,17 @@ parser_node_for_entry :: proc(state: ^Parser_State, parent, entry_index: int) ->
 }
 
 @(private)
+parser_node_for_array_element :: proc(state: ^Parser_State, parent, element_index: int) -> int {
+	for node, index in state.nodes {
+		if node.parent == parent && node.location == .Array_Element &&
+		   node.semantic_index == element_index {
+			return index+1
+		}
+	}
+	return 0
+}
+
+@(private)
 parser_find_child :: proc(state: ^Parser_State, parent: int, key: string) -> int {
 	table, ok := parser_node_table(state, parent)
 	assert(ok)
@@ -189,7 +341,8 @@ parser_append_child :: proc(
 	key: ^string,
 	value: ^Value,
 	form: Parse_Definition_Form,
-	definition_range: Source_Range,
+	definition_range, key_range, value_range: Source_Range,
+	binding_range_id: int,
 	start, end: int,
 ) -> (int, Parse_Error) {
 	table, ok := parser_node_table(state, parent)
@@ -207,6 +360,9 @@ parser_append_child :: proc(
 			location = .Table_Entry,
 			form = form,
 			definition_range = definition_range,
+			key_range = key_range,
+			value_range = value_range,
+			binding_range_id = binding_range_id,
 		},
 		start,
 		end,
@@ -309,13 +465,17 @@ parser_create_table_child :: proc(
 	defer if value_owned {
 		destroy_value_with_gate(&value, &state.gate, state.loc)
 	}
+	key_source := source_range(state.input, key_range.start, key_range.end)
 	node_id, append_error := parser_append_child(
 		state,
 		parent,
 		key,
 		&value,
 		form,
-		source_range(state.input, key_range.start, key_range.end),
+		key_source,
+		key_source,
+		key_source,
+		0,
 		key_range.start,
 		key_range.end,
 	)
@@ -611,6 +771,9 @@ parse_key_value_expression :: proc(state: ^Parser_State, start: int) -> (int, Pa
 			&value,
 			form,
 			definition_range,
+			source_range(state.input, key_range.start, key_range.end),
+			source_range(state.input, value_start, value_end),
+			state.last_binding_range_id,
 			expression_start,
 			value_end,
 		)
@@ -709,6 +872,7 @@ parser_append_aot_element :: proc(
 	}
 	parser_store_node_value(state, container_id, Value(array))
 	value_owned = false
+	element_range := source_range(state.input, key_range.start, key_range.end)
 	element_id, node_error := parser_append_node(
 		state,
 		Parser_Node{
@@ -716,9 +880,9 @@ parser_append_aot_element :: proc(
 			semantic_index = prospective_index,
 			location = .Array_Element,
 			form = .Array_Of_Tables_Element,
-			definition_range = source_range(
-				state.input, key_range.start, key_range.end,
-			),
+			definition_range = element_range,
+			key_range = element_range,
+			value_range = element_range,
 		},
 		key_range.start,
 		key_range.end,
@@ -750,13 +914,17 @@ parser_aot_leaf :: proc(
 		defer if value_owned {
 			destroy_value_with_gate(&value, &state.gate, state.loc)
 		}
+		key_source := source_range(state.input, key_range.start, key_range.end)
 		container_id, array_error = parser_append_child(
 			state,
 			parent,
 			key,
 			&value,
 			.Array_Of_Tables,
-			source_range(state.input, key_range.start, key_range.end),
+			key_source,
+			key_source,
+			key_source,
+			0,
 			key_range.start,
 			key_range.end,
 		)

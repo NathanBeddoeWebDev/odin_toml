@@ -16,8 +16,11 @@ Parser_State :: struct {
 	allocator: runtime.Allocator,
 	gate:      Allocator_Release_Gate,
 	root:         Table,
-	nodes:        Parser_Node_Array,
-	active_table: int,
+	nodes:          Parser_Node_Array,
+	binding_ranges: Binding_Range_Node_Array,
+	capture_binding_ranges: bool,
+	last_binding_range_id: int,
+	active_table:   int,
 	active_path:  Parser_Path_Stack,
 	max_depth:      int,
 	container_path:  Parser_Path_Stack,
@@ -1432,15 +1435,18 @@ validate_comment :: proc(
 @(private)
 parser_cleanup :: proc(state: ^Parser_State) {
 	parser_release_nodes(state)
+	parser_release_binding_ranges(state)
 	destroy_table_with_gate(&state.root, &state.gate, state.loc)
 }
 
 @(private)
-parse_document :: proc(
+parse_document_internal :: proc(
 	input: string,
 	options: Parse_Options,
 	allocator: runtime.Allocator,
 	loc: runtime.Source_Code_Location,
+	retained_nodes: ^Parser_Node_Array = nil,
+	retained_ranges: ^Binding_Range_Node_Array = nil,
 ) -> (Document, Parse_Error) {
 	if allocator.procedure == nil {
 		return {}, Parse_Configuration_Error.Invalid_Allocator
@@ -1465,6 +1471,7 @@ parse_document :: proc(
 		gate = gate,
 		max_depth = max_depth,
 		loc = loc,
+		capture_binding_ranges = retained_ranges != nil,
 	}
 	root_error: Parse_Error
 	state.root, root_error = parser_make_table(&state, 0, 0, 0, {})
@@ -1523,11 +1530,79 @@ parse_document :: proc(
 		}
 	}
 
-	parser_release_nodes(&state)
+	if retained_nodes == nil {
+		parser_release_nodes(&state)
+	} else {
+		retained_nodes^ = state.nodes
+		state.nodes = {}
+	}
+	if retained_ranges == nil {
+		parser_release_binding_ranges(&state)
+	} else {
+		retained_ranges^ = state.binding_ranges
+		state.binding_ranges = {}
+	}
 	document := Document{root = state.root, allocator = allocator}
 	state.root = {}
 	succeeded = true
 	return document, nil
+}
+
+@(private)
+parse_document :: proc(
+	input: string,
+	options: Parse_Options,
+	allocator: runtime.Allocator,
+	loc: runtime.Source_Code_Location,
+) -> (Document, Parse_Error) {
+	return parse_document_internal(input, options, allocator, loc)
+}
+
+@(private)
+parse_ranged_document :: proc(
+	input: string,
+	options: Parse_Options,
+	allocator: runtime.Allocator,
+	loc: runtime.Source_Code_Location,
+) -> (
+	document: Document,
+	nodes: Parser_Node_Array,
+	ranges: Binding_Range_Node_Array,
+	err: Parse_Error,
+) {
+	document, err = parse_document_internal(
+		input, options, allocator, loc, &nodes, &ranges,
+	)
+	return
+}
+
+@(private)
+destroy_ranged_parse_state :: proc(
+	nodes: ^Parser_Node_Array,
+	ranges: ^Binding_Range_Node_Array,
+	allocator: runtime.Allocator,
+	loc: runtime.Source_Code_Location,
+) {
+	gate, gate_error := allocator_release_gate_init(allocator, loc)
+	assert(gate_error == nil)
+	if nodes != nil {
+		release_owned_memory(
+			&gate,
+			raw_data(nodes^),
+			cap(nodes^)*size_of(Parser_Node),
+			loc,
+		)
+		nodes^ = {}
+	}
+	if ranges != nil {
+		release_owned_memory(
+			&gate,
+			raw_data(ranges^),
+			cap(ranges^)*size_of(Binding_Range_Node),
+			loc,
+		)
+		ranges^ = {}
+	}
 }
 
 @(require_results)

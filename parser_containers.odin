@@ -331,6 +331,13 @@ parser_parse_array :: proc(
 		value := Value(array)
 		destroy_value_with_gate(&value, &state.gate, state.loc)
 	}
+	range_id, range_error := parser_append_binding_range(
+		state, source_range(state.input, start, start+1), start, start+1,
+	)
+	if range_error != nil {
+		container_store_error(state, range_error)
+		return {}, 0, false
+	}
 
 	index := start+1
 	index, ok = container_try_trivia(state, index)
@@ -338,6 +345,8 @@ parser_parse_array :: proc(
 		return {}, 0, false
 	}
 	if index < len(state.input) && state.input[index] == ']' {
+		parser_binding_range_finish(state, range_id, start, index+1)
+		state.last_binding_range_id = range_id
 		owned = false
 		return Value(array), index+1, true
 	}
@@ -365,6 +374,7 @@ parser_parse_array :: proc(
 		if !ok {
 			return {}, 0, false
 		}
+		child_range_id := state.last_binding_range_id
 		child_owned := true
 		defer if child_owned {
 			destroy_value_with_gate(&child, &state.gate, state.loc)
@@ -372,6 +382,7 @@ parser_parse_array :: proc(
 		if !container_try_append_array(state, &array, &child, index, child_end) {
 			return {}, 0, false
 		}
+		parser_binding_range_attach(state, child_range_id, range_id, len(array)-1)
 		child_owned = false
 
 		index, ok = container_try_trivia(state, child_end)
@@ -380,6 +391,8 @@ parser_parse_array :: proc(
 		}
 		if index < len(state.input) && state.input[index] == ']' {
 			parser_path_pop_to(state, base_path_count)
+			parser_binding_range_finish(state, range_id, start, index+1)
+			state.last_binding_range_id = range_id
 			owned = false
 			return Value(array), index+1, true
 		}
@@ -397,6 +410,8 @@ parser_parse_array :: proc(
 			return {}, 0, false
 		}
 		if index < len(state.input) && state.input[index] == ']' {
+			parser_binding_range_finish(state, range_id, start, index+1)
+			state.last_binding_range_id = range_id
 			owned = false
 			return Value(array), index+1, true
 		}
@@ -415,10 +430,11 @@ Inline_Metadata_Array :: distinct [dynamic]Inline_Entry_Metadata
 
 @(private)
 Inline_Table_State :: struct {
-	table:        Table,
-	metadata:     Inline_Metadata_Array,
-	parent:       ^Inline_Table_State,
-	parent_entry: int,
+	table:         Table,
+	metadata:      Inline_Metadata_Array,
+	parent:        ^Inline_Table_State,
+	parent_entry:  int,
+	binding_range_id: int,
 }
 
 @(private)
@@ -553,6 +569,17 @@ inline_new_child :: proc(
 		release_owned_memory(&state.gate, memory, size_of(Inline_Table_State), state.loc)
 		return nil, err
 	}
+	child.binding_range_id, err = parser_append_binding_range(
+		state, source_range(state.input, start, end), start, end,
+	)
+	if err != nil {
+		destroy_table_with_gate(&child.table, &state.gate, state.loc)
+		release_owned_memory(&state.gate, memory, size_of(Inline_Table_State), state.loc)
+		return nil, err
+	}
+	parser_binding_range_attach(
+		state, child.binding_range_id, parent.binding_range_id, parent_entry,
+	)
 	return child, nil
 }
 
@@ -785,6 +812,15 @@ parser_parse_inline_table :: proc(
 	if !ok {
 		return {}, 0, false
 	}
+	range_error: Parse_Error
+	root.binding_range_id, range_error = parser_append_binding_range(
+		state, source_range(state.input, start, start+1), start, start+1,
+	)
+	if range_error != nil {
+		container_store_error(state, range_error)
+		destroy_table_with_gate(&root.table, &state.gate, state.loc)
+		return {}, 0, false
+	}
 	owned := true
 	defer {
 		inline_cleanup_scratch(state, &root)
@@ -799,6 +835,8 @@ parser_parse_inline_table :: proc(
 		return {}, 0, false
 	}
 	if index < len(state.input) && state.input[index] == '}' {
+		parser_binding_range_finish(state, root.binding_range_id, start, index+1)
+		state.last_binding_range_id = root.binding_range_id
 		owned = false
 		return Value(root.table), index+1, true
 	}
@@ -952,6 +990,7 @@ parser_parse_inline_table :: proc(
 		if !ok {
 			return {}, 0, false
 		}
+		value_range_id := state.last_binding_range_id
 		value_owned := true
 		defer if value_owned {
 			destroy_value_with_gate(&value, &state.gate, state.loc)
@@ -960,11 +999,23 @@ parser_parse_inline_table :: proc(
 			form = form,
 			range = source_range(state.input, leaf_range.start, value_end),
 		}
+		leaf_entry_index := len(current.table)
 		if !container_try_inline_append(
 			state, current, &leaf_key, &value, metadata, pair_start, value_end,
 		) {
 			return {}, 0, false
 		}
+		parser_binding_range_attach(
+			state,
+			value_range_id,
+			current.binding_range_id,
+			leaf_entry_index,
+		)
+		parser_binding_range_set_key_source(
+			state,
+			value_range_id,
+			source_range(state.input, leaf_range.start, leaf_range.end),
+		)
 		value_owned = false
 		leaf_owned = false
 
@@ -974,6 +1025,8 @@ parser_parse_inline_table :: proc(
 		}
 		if index < len(state.input) && state.input[index] == '}' {
 			parser_path_pop_to(state, base_path_count)
+			parser_binding_range_finish(state, root.binding_range_id, start, index+1)
+			state.last_binding_range_id = root.binding_range_id
 			owned = false
 			return Value(root.table), index+1, true
 		}
@@ -991,6 +1044,8 @@ parser_parse_inline_table :: proc(
 			return {}, 0, false
 		}
 		if index < len(state.input) && state.input[index] == '}' {
+			parser_binding_range_finish(state, root.binding_range_id, start, index+1)
+			state.last_binding_range_id = root.binding_range_id
 			owned = false
 			return Value(root.table), index+1, true
 		}
@@ -1031,6 +1086,10 @@ parser_parse_leaf_value :: proc(
 			container_store_error(state, err)
 			return {}, 0, .Key_Value, false
 		}
+		if !parser_capture_value_range(state, start, end) {
+			release_owned_text(state, &text)
+			return {}, 0, .Key_Value, false
+		}
 		return Value(String(text)), end, .Key_Value, true
 	}
 	err: Parse_Error
@@ -1055,6 +1114,9 @@ parser_parse_leaf_value :: proc(
 	)
 	if err != nil {
 		container_store_error(state, err)
+		return {}, 0, .Key_Value, false
+	}
+	if !parser_capture_value_range(state, start, end) {
 		return {}, 0, .Key_Value, false
 	}
 	return value, end, .Key_Value, true

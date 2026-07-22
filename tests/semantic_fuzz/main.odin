@@ -7,6 +7,13 @@ import "core:unicode/utf8"
 import toml "../.."
 import test_support "../support"
 
+TOML_LIBFUZZER_DRIVER :: #config(TOML_LIBFUZZER_DRIVER, false)
+
+keep_semantic_fuzz_cli_imports :: proc() {
+	_ = os.args
+	_ = utf8.valid_string
+}
+
 coverage_strict_parse_target :: proc(input: []byte) {
 	doc, err := toml.parse_bytes(input)
 	if err == nil {
@@ -34,6 +41,12 @@ coverage_parse_unparse_target :: proc(input: []byte) {
 	assert(reencode_error == nil)
 	defer delete(reencoded)
 	assert(reencoded == canonical)
+}
+
+coverage_valid_utf8_parser_mutation_target :: proc(input: []byte) {
+	if utf8.valid_string(string(input)) {
+		coverage_parse_unparse_target(input)
+	}
 }
 
 coverage_semantic_lifecycle_target :: proc(input: []byte) {
@@ -145,6 +158,7 @@ coverage_writer_validation_target :: proc(input: []byte) {
 	assert(string(accepted[:accepted_count]) == canonical[:accepted_count])
 }
 
+when !TOML_LIBFUZZER_DRIVER {
 main :: proc() {
 	if len(os.args) != 2 {
 		_, _ = os.write_string(
@@ -164,9 +178,7 @@ main :: proc() {
 	case "strict-parse":
 		coverage_strict_parse_target(input)
 	case "valid-utf8":
-		if utf8.valid_string(string(input)) {
-			coverage_parse_unparse_target(input)
-		}
+		coverage_valid_utf8_parser_mutation_target(input)
 	case "parse-unparse":
 		coverage_parse_unparse_target(input)
 	case "semantic-lifecycle":
@@ -177,4 +189,5 @@ main :: proc() {
 		_, _ = os.write_string(os.stderr, "semantic-fuzz: unknown target\n")
 		os.exit(2)
 	}
+}
 }

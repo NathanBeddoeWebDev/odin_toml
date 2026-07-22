@@ -3,6 +3,7 @@ package main
 import json "core:encoding/json"
 import "core:fmt"
 import "core:io"
+import "core:unicode/utf8"
 import "core:mem"
 import "core:slice"
 import "core:strings"
@@ -404,7 +405,8 @@ build_protocol_document :: proc(root: Protocol_Object) -> (toml.Document, Adapte
 }
 
 encode_to_writer :: proc(input: []byte, writer: io.Writer) -> Adapter_Error {
-	if !has_one_root_json_value(input) || !json.is_valid(input, .JSON, true) {
+	if !utf8.valid_string(string(input)) || !has_one_root_json_value(input) ||
+	   !json.is_valid(input, .JSON, true) {
 		return Adapter_Error_Kind.Malformed_Input
 	}
 	if len(input) > max(int)/64 {

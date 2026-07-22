@@ -152,4 +152,16 @@ done
 
 scripts/probe_rtti.sh
 
+if [[ -n ${MATRIX_TARGET:-} ]]; then
+  matrix_target=$MATRIX_TARGET
+else
+  matrix_target=$(python3 -c '
+import platform
+machine = platform.machine().lower()
+machine = {"x86_64": "amd64", "aarch64": "arm64"}.get(machine, machine)
+print(f"{platform.system().lower()}_{machine}")
+')
+fi
+scripts/write_public_suite_report.py --target "$matrix_target"
+
 printf 'all normal and optimized scaffold checks and feasibility probes passed\n'

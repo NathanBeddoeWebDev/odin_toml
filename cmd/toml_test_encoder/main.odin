@@ -2,6 +2,13 @@ package main
 
 import "core:os"
 
+TOML_LIBFUZZER_DRIVER :: #config(TOML_LIBFUZZER_DRIVER, false)
+
+keep_encoder_cli_import :: proc() {
+	_ = os.args
+}
+
+when !TOML_LIBFUZZER_DRIVER {
 main :: proc() {
 	fuzz_target := len(os.args) == 2 && os.args[1] == "--fuzz-target"
 	if len(os.args) != 1 && !fuzz_target {
@@ -26,4 +33,5 @@ main :: proc() {
 		_, _ = os.write_string(os.stderr, "toml-test encoder: rejected input\n")
 		os.exit(1)
 	}
+}
 }

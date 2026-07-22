@@ -28,7 +28,7 @@ jobs:
         if: always()
         run: test ! -f build/reports/compiler.txt || cat build/reports/compiler.txt
 
-  float-format-platforms:
+  platform-matrix:
     strategy:
       fail-fast: false
       matrix:
@@ -44,6 +44,8 @@ jobs:
           - runner: windows-2025
             target: windows_amd64
     runs-on: ${{ matrix.runner }}
+    env:
+      MATRIX_TARGET: ${{ matrix.target }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - name: Check out pinned Reference Odin
@@ -66,24 +68,47 @@ jobs:
       - name: Add Reference Odin to PATH
         shell: bash
         run: echo "$RUNNER_TEMP/Odin" >> "$GITHUB_PATH"
-      - name: Prepare pinned test-only oracle
+      - name: Prepare pinned test-only dependencies
         shell: bash
         env:
           CC: ${{ runner.os == 'Windows' && 'clang' || 'cc' }}
         run: scripts/prepare_test_dependencies.sh
-      - name: Run binary64 formatting gate
+      - name: Run complete normal and speed public suite
+        shell: bash
+        run: scripts/check.sh
+      - name: Run AddressSanitizer aggregate fuzz campaign
+        shell: bash
+        run: scripts/run_sanitizer_fuzz.sh --target "${{ matrix.target }}" --duration 300
+      - name: Upload platform reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: reports-${{ matrix.target }}
+          path: build/reports/
+          if-no-files-found: warn
+
+  thread-sanitizer:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Build pinned Reference Odin
         shell: bash
         run: |
           set -euo pipefail
-          test "$(odin version)" = "odin version $(awk -F'"' '/^version = / {print $2}' toolchain/odin.lock)"
-          printf 'running binary64 format gate for %s\n' "${{ matrix.target }}"
-          common=(-vet -vet-style -warnings-as-errors)
-          for mode in minimal speed; do
-            odin test tests/float_format "-o:$mode" "${common[@]}" \
-              -define:TOML_BINARY64_FORMAT_GATE_TESTING=true \
-              -define:TOML_DECIMAL_GATE_TESTING=true \
-              -define:ODIN_TEST_THREADS=1 \
-              -define:ODIN_TEST_RANDOM_SEED=123456789 \
-              -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true
-          done
-          scripts/check_float_format_oracle.sh
+          revision=$(awk -F'"' '/^revision = / {print $2}' toolchain/odin.lock)
+          source=$(awk -F'"' '/^source = / {print $2}' toolchain/odin.lock)
+          git clone --filter=blob:none "$source" "$RUNNER_TEMP/Odin"
+          git -C "$RUNNER_TEMP/Odin" fetch --depth=1 origin "$revision"
+          git -C "$RUNNER_TEMP/Odin" checkout --detach "$revision"
+          (cd "$RUNNER_TEMP/Odin" && ./build_odin.sh release-native)
+          echo "$RUNNER_TEMP/Odin" >> "$GITHUB_PATH"
+      - name: Run frozen-registry concurrent reads under ThreadSanitizer
+        shell: bash
+        run: scripts/check_thread_sanitizer.sh --target linux_amd64
+      - name: Upload ThreadSanitizer report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: reports-linux-amd64-thread-sanitizer
+          path: build/reports/thread-sanitizer.json
+          if-no-files-found: warn

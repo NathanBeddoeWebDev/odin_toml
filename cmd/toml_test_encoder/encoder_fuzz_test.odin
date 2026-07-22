@@ -52,6 +52,18 @@ test_encoder_adapter_large_accepted_artifact_is_not_limited_by_harness_storage :
 }
 
 @(test)
+test_encoder_adapter_rejects_invalid_utf8_without_panicking :: proc(t: ^testing.T) {
+	_ = t
+	fixture := [?]byte{
+		'{', '"', 'v', 'a', 'l', 'u', '1', '"', ':', '{', '"',
+		0xb1, 0xb1, 0xb1, 0xb1, 0xb1, 0xb1, 0xb1, 0xb1, 0xb1, 0xb1,
+		0xb1, 0xb1, 0xb1, 't', 'y', 'p', 'u', 'e', '"', ':', '"',
+		'4', '5', '"', '}', '}',
+	}
+	run_encoder_adapter_coverage_target(fixture[:])
+}
+
+@(test)
 test_encoder_adapter_minimized_protocol_regressions_remain_rejected_without_output :: proc(t: ^testing.T) {
 	fixtures := [?]string{
 		`{`,

@@ -65,6 +65,10 @@ for mode in minimal speed; do
     -define:ODIN_TEST_THREADS=1 \
     -define:ODIN_TEST_RANDOM_SEED=123456789 \
     -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true
+  odin test tests/typed_fuzz "-o:$mode" "${common[@]}" \
+    -define:ODIN_TEST_THREADS=1 \
+    -define:ODIN_TEST_RANDOM_SEED=123456789 \
+    -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true
   odin test tests/typed_marshal "-o:$mode" "${common[@]}" \
     -define:ODIN_TEST_THREADS=1 \
     -define:ODIN_TEST_RANDOM_SEED=123456789 \
@@ -137,6 +141,9 @@ for mode in minimal speed; do
   printf 'value = { nested = [1, 2, 3] }\n' | "$work/semantic-fuzz-$mode" parse-unparse
   printf '\003semantic-owner' | "$work/semantic-fuzz-$mode" semantic-lifecycle
   printf '\001\002\003writer' | "$work/semantic-fuzz-$mode" writer-validation
+
+  odin build tests/typed_fuzz "-o:$mode" "${common[@]}" -out:"$work/typed-fuzz-$mode"
+  printf '\000typed-codec' | "$work/typed-fuzz-$mode"
 
   odin build cmd/toml_test_encoder -file "-o:$mode" "${common[@]}" -out:"$work/encoder-fuzz-$mode"
   printf '{"malformed":' | "$work/encoder-fuzz-$mode" --fuzz-target

@@ -37,6 +37,33 @@ allocator_allocate :: proc(
 }
 
 @(private)
+allocator_allocate_aligned :: proc(
+	size, alignment: int,
+	allocator: mem.Allocator,
+	zero_memory := true,
+	loc := #caller_location,
+) -> (memory: rawptr, err: runtime.Allocator_Error) {
+	if allocator.procedure == nil {
+		return nil, .Invalid_Argument
+	}
+	mode := runtime.Allocator_Mode.Alloc
+	if !zero_memory {
+		mode = .Alloc_Non_Zeroed
+	}
+	result: []byte
+	result, err = allocator.procedure(
+		allocator.data,
+		mode,
+		size,
+		alignment,
+		nil,
+		0,
+		loc,
+	)
+	return raw_data(result), err
+}
+
+@(private)
 allocator_resize :: proc(
 	memory: rawptr,
 	old_size, new_size: int,

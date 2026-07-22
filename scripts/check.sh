@@ -123,6 +123,8 @@ for mode in minimal speed; do
   odin build tests/consumer_typed "-o:$mode" "${common[@]}" -out:"$work/typed-$mode"
   odin build examples/semantic_lifecycle "-o:$mode" "${common[@]}" -out:"$work/semantic-lifecycle-$mode"
   "$work/semantic-lifecycle-$mode"
+  odin build examples/typed_unmarshal_cleanup "-o:$mode" "${common[@]}" -out:"$work/typed-unmarshal-cleanup-$mode"
+  "$work/typed-unmarshal-cleanup-$mode"
 
   odin build tests/semantic_fuzz "-o:$mode" "${common[@]}" -out:"$work/semantic-fuzz-$mode"
   printf 'value = [1, 2, 3]\n' | "$work/semantic-fuzz-$mode" strict-parse

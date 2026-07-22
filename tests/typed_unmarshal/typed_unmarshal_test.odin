@@ -2,6 +2,7 @@ package typed_unmarshal_test
 
 import "base:runtime"
 import "core:mem"
+import "core:strings"
 import "core:testing"
 import toml "../.."
 import temporal "../../temporal"
@@ -11,6 +12,123 @@ Named_Bool :: distinct bool
 Named_Int :: distinct i16
 Named_Uint :: distinct u16
 Named_Float :: distinct f32
+Named_String :: distinct string
+Named_Map_Key :: distinct string
+
+Owning_Index :: enum {
+	First,
+	Second,
+}
+
+Owning_Leaf :: struct {
+	text: Named_String,
+}
+
+Owning_Optional :: union {
+	Owning_Leaf,
+}
+
+Owning_Aligned_Empty :: struct #align(64) {}
+
+Owning_Root :: struct {
+	text: Named_String,
+}
+
+Owning_Root_Optional :: union {
+	Owning_Root,
+}
+
+Owning_Root_Pure_Maybe :: union {
+	^Owning_Root,
+}
+
+Owning_Provenance :: struct {
+	installed: Named_String,
+	missing:   Named_String,
+	ignored:   Named_String `toml:"-"`,
+}
+
+Owning_Zero_Size :: struct {}
+
+Owning_Empty_Containers :: struct {
+	slice:   []Owning_Zero_Size,
+	items:   [dynamic]Owning_Zero_Size,
+	mapping: map[string]i32,
+}
+
+Owning_Destination :: struct {
+	fixed:      [2]Named_String,
+	enumerated: [Owning_Index]Named_String,
+	slice:      []Named_String,
+	items:      [dynamic]Named_String,
+	mapping:    map[Named_Map_Key]Named_String,
+	pointer:    ^Owning_Leaf,
+	optional:   Owning_Optional,
+	empty:      ^Owning_Aligned_Empty,
+}
+
+owning_destination_has_commits :: proc(destination: ^Owning_Destination) -> bool {
+	return len(destination.fixed[0]) > 0 || len(destination.fixed[1]) > 0 ||
+	       len(destination.enumerated[.First]) > 0 ||
+	       len(destination.enumerated[.Second]) > 0 ||
+	       raw_data(destination.slice) != nil || len(destination.slice) > 0 ||
+	       destination.items.allocator.procedure != nil ||
+	       destination.mapping.allocator.procedure != nil ||
+	       destination.pointer != nil || destination.optional != nil ||
+	       destination.empty != nil
+}
+
+cleanup_owning_destination :: proc(
+	destination: ^Owning_Destination,
+	allocator: runtime.Allocator,
+) {
+	for &text in destination.fixed {
+		assert(delete(string(text), allocator) == nil)
+		text = ""
+	}
+	for &text in destination.enumerated {
+		assert(delete(string(text), allocator) == nil)
+		text = ""
+	}
+	for &text in destination.slice {
+		assert(delete(string(text), allocator) == nil)
+		text = ""
+	}
+	if raw_data(destination.slice) != nil {
+		assert(delete(destination.slice, allocator) == nil)
+	}
+	destination.slice = nil
+	for &text in destination.items {
+		assert(delete(string(text), allocator) == nil)
+		text = ""
+	}
+	if destination.items.allocator.procedure != nil {
+		assert(delete(destination.items) == nil)
+	}
+	destination.items = nil
+	for key, value in destination.mapping {
+		assert(delete(string(key), allocator) == nil)
+		assert(delete(string(value), allocator) == nil)
+	}
+	if destination.mapping.allocator.procedure != nil {
+		assert(delete(destination.mapping) == nil)
+	}
+	destination.mapping = nil
+	if destination.pointer != nil {
+		assert(delete(string(destination.pointer.text), allocator) == nil)
+		destination.pointer.text = ""
+		assert(free(destination.pointer, allocator) == nil)
+		destination.pointer = nil
+	}
+	if value, ok := destination.optional.(Owning_Leaf); ok {
+		assert(delete(string(value.text), allocator) == nil)
+	}
+	destination.optional = nil
+	if destination.empty != nil {
+		assert(free(destination.empty, allocator) == nil)
+		destination.empty = nil
+	}
+}
 
 Machine_Integers :: struct {
 	signed:   int,
@@ -31,6 +149,383 @@ Scalar_Destination :: struct {
 	nested: Nested,
 	defaulted: i32,
 	ignored: string `toml:"-"`,
+}
+
+@(test)
+unmarshal_installs_owning_containers_and_wrappers_with_selected_allocator :: proc(t: ^testing.T) {
+	events: [512]test_support.Allocator_Event
+	live: [256]test_support.Live_Allocation
+	state: test_support.Observed_Allocator
+	test_support.observed_allocator_init(&state, context.allocator, events[:], live[:])
+	allocator := test_support.observed_allocator(&state)
+
+	destination: Owning_Destination
+	err := toml.unmarshal_string(
+		`fixed = ["fixed-0", "fixed-1"]
+
+enumerated = ["enum-0", "enum-1"]
+
+slice = ["slice-0", "slice-1"]
+
+items = ["dynamic-0", "dynamic-1"]
+
+mapping = { first = "map-0", second = "map-1" }
+
+pointer = { text = "pointer" }
+
+optional = { text = "optional" }
+
+empty = {}
+`,
+		&destination,
+		allocator = allocator,
+	)
+	testing.expect(t, err == nil)
+	if err != nil {
+		return
+	}
+	testing.expect_value(t, destination.fixed, [2]Named_String{"fixed-0", "fixed-1"})
+	testing.expect_value(t, destination.enumerated[.First], Named_String("enum-0"))
+	testing.expect_value(t, destination.enumerated[.Second], Named_String("enum-1"))
+	testing.expect_value(t, len(destination.slice), 2)
+	if len(destination.slice) == 2 {
+		testing.expect_value(t, destination.slice[0], Named_String("slice-0"))
+		testing.expect_value(t, destination.slice[1], Named_String("slice-1"))
+	}
+	testing.expect_value(t, len(destination.items), 2)
+	if len(destination.items) == 2 {
+		testing.expect_value(t, destination.items[0], Named_String("dynamic-0"))
+		testing.expect_value(t, destination.items[1], Named_String("dynamic-1"))
+	}
+	testing.expect_value(t, destination.mapping["first"], Named_String("map-0"))
+	testing.expect_value(t, destination.mapping["second"], Named_String("map-1"))
+	testing.expect(t, destination.pointer != nil)
+	if destination.pointer != nil {
+		testing.expect_value(t, destination.pointer.text, Named_String("pointer"))
+	}
+	optional, optional_ok := destination.optional.(Owning_Leaf)
+	testing.expect(t, optional_ok)
+	if optional_ok {
+		testing.expect_value(t, optional.text, Named_String("optional"))
+	}
+	testing.expect(t, destination.empty != nil)
+	if destination.empty != nil {
+		testing.expect_value(
+			t,
+			uintptr(destination.empty)%uintptr(align_of(Owning_Aligned_Empty)),
+			uintptr(0),
+		)
+	}
+
+	cleanup_owning_destination(&destination, allocator)
+	testing.expect(t, raw_data(destination.slice) == nil && len(destination.slice) == 0)
+	testing.expect(t, destination.items.allocator.procedure == nil)
+	testing.expect(t, destination.mapping == nil)
+	testing.expect(t, destination.pointer == nil)
+	testing.expect(t, destination.optional == nil)
+	testing.expect(t, destination.empty == nil)
+	testing.expect_value(t, state.live_count, 0)
+	testing.expect_value(t, state.foreign_release_count, 0)
+}
+
+@(test)
+unmarshal_accepts_map_pointer_and_optional_wrapper_roots :: proc(t: ^testing.T) {
+	events: [256]test_support.Allocator_Event
+	live: [128]test_support.Live_Allocation
+	state: test_support.Observed_Allocator
+	test_support.observed_allocator_init(&state, context.allocator, events[:], live[:])
+	allocator := test_support.observed_allocator(&state)
+
+	mapping: map[Named_Map_Key]Owning_Leaf
+	map_error := toml.unmarshal_string(
+		`first = { text = "map-root" }
+`,
+		&mapping,
+		allocator = allocator,
+	)
+	testing.expect(t, map_error == nil)
+	testing.expect_value(t, mapping["first"].text, Named_String("map-root"))
+	for key, value in mapping {
+		assert(delete(string(key), allocator) == nil)
+		assert(delete(string(value.text), allocator) == nil)
+	}
+	assert(delete(mapping) == nil)
+	mapping = nil
+
+	pointer: ^Owning_Root
+	pointer_error := toml.unmarshal_string(
+		`text = "pointer-root"
+`, &pointer, allocator = allocator,
+	)
+	testing.expect(t, pointer_error == nil)
+	testing.expect(t, pointer != nil)
+	if pointer != nil {
+		testing.expect_value(t, pointer.text, Named_String("pointer-root"))
+		assert(delete(string(pointer.text), allocator) == nil)
+		assert(free(pointer, allocator) == nil)
+		pointer = nil
+	}
+
+	optional: Owning_Root_Optional
+	optional_error := toml.unmarshal_string(
+		`text = "optional-root"
+`, &optional, allocator = allocator,
+	)
+	testing.expect(t, optional_error == nil)
+	optional_value, optional_ok := optional.(Owning_Root)
+	testing.expect(t, optional_ok)
+	if optional_ok {
+		testing.expect_value(t, optional_value.text, Named_String("optional-root"))
+		assert(delete(string(optional_value.text), allocator) == nil)
+	}
+	optional = nil
+
+	pure: Owning_Root_Pure_Maybe
+	pure_error := toml.unmarshal_string(
+		`text = "pure-root"
+`, &pure, allocator = allocator,
+	)
+	testing.expect(t, pure_error == nil)
+	pure_pointer, pure_ok := pure.(^Owning_Root)
+	testing.expect(t, pure_ok)
+	if pure_ok {
+		testing.expect_value(t, pure_pointer.text, Named_String("pure-root"))
+		assert(delete(string(pure_pointer.text), allocator) == nil)
+		assert(free(pure_pointer, allocator) == nil)
+	}
+	pure = nil
+
+	testing.expect_value(t, state.live_count, 0)
+	testing.expect_value(t, state.foreign_release_count, 0)
+}
+
+@(test)
+unmarshal_preserves_missing_and_ignored_owner_provenance :: proc(t: ^testing.T) {
+	application_events: [64]test_support.Allocator_Event
+	application_live: [32]test_support.Live_Allocation
+	application_state: test_support.Observed_Allocator
+	test_support.observed_allocator_init(
+		&application_state,
+		context.allocator,
+		application_events[:],
+		application_live[:],
+	)
+	application_allocator := test_support.observed_allocator(&application_state)
+
+	selected_events: [256]test_support.Allocator_Event
+	selected_live: [128]test_support.Live_Allocation
+	selected_state: test_support.Observed_Allocator
+	test_support.observed_allocator_init(
+		&selected_state,
+		context.allocator,
+		selected_events[:],
+		selected_live[:],
+	)
+	selected_allocator := test_support.observed_allocator(&selected_state)
+
+	missing, missing_error := strings.clone("application-missing", application_allocator)
+	assert(missing_error == nil)
+	ignored, ignored_error := strings.clone("application-ignored", application_allocator)
+	assert(ignored_error == nil)
+	destination := Owning_Provenance{
+		missing = Named_String(missing),
+		ignored = Named_String(ignored),
+	}
+	err := toml.unmarshal_string(
+		`installed = "selected-installed"
+ignored = "source-ignored"
+`,
+		&destination,
+		allocator = selected_allocator,
+	)
+	testing.expect(t, err == nil)
+	testing.expect_value(t, destination.installed, Named_String("selected-installed"))
+	testing.expect_value(t, destination.missing, Named_String("application-missing"))
+	testing.expect_value(t, destination.ignored, Named_String("application-ignored"))
+	testing.expect_value(t, application_state.foreign_release_count, 0)
+	testing.expect_value(t, selected_state.foreign_release_count, 0)
+
+	assert(delete(string(destination.installed), selected_allocator) == nil)
+	assert(delete(string(destination.missing), application_allocator) == nil)
+	assert(delete(string(destination.ignored), application_allocator) == nil)
+	destination = {}
+	testing.expect_value(t, application_state.live_count, 0)
+	testing.expect_value(t, selected_state.live_count, 0)
+	testing.expect_value(t, application_state.foreign_release_count, 0)
+	testing.expect_value(t, selected_state.foreign_release_count, 0)
+}
+
+@(test)
+unmarshal_owning_installation_failure_sweep_leaves_cleanable_commits :: proc(t: ^testing.T) {
+	input := `fixed = ["fixed-0", "fixed-1"]
+
+enumerated = ["enum-0", "enum-1"]
+
+slice = ["slice-0", "slice-1"]
+
+items = ["dynamic-0", "dynamic-1"]
+
+mapping = { first = "map-0", second = "map-1" }
+
+pointer = { text = "pointer" }
+
+optional = { text = "optional" }
+
+empty = {}
+`
+	saw_success := false
+	saw_partial := false
+	saw_map_prefix := false
+	for failure_ordinal in 1..=256 {
+		events: [2048]test_support.Allocator_Event
+		live: [512]test_support.Live_Allocation
+		state: test_support.Observed_Allocator
+		test_support.observed_allocator_init(&state, context.allocator, events[:], live[:])
+		state.fail_at_allocation = failure_ordinal
+		state.failure_error = .Invalid_Argument
+		allocator := test_support.observed_allocator(&state)
+
+		destination: Owning_Destination
+		err := toml.unmarshal_string(input, &destination, allocator = allocator)
+		if err == nil {
+			saw_success = true
+		} else {
+			if allocator_error, exact := err.(runtime.Allocator_Error); exact {
+				testing.expect_value(t, allocator_error, runtime.Allocator_Error.Invalid_Argument)
+			}
+			if owning_destination_has_commits(&destination) {
+				saw_partial = true
+				allocator_error, exact := err.(runtime.Allocator_Error)
+				testing.expect(t, exact)
+				if exact {
+					testing.expect_value(
+						t, allocator_error, runtime.Allocator_Error.Invalid_Argument,
+					)
+				}
+			}
+			if len(destination.mapping) == 1 {
+				first, first_ok := destination.mapping["first"]
+				_, second_ok := destination.mapping["second"]
+				testing.expect(t, first_ok)
+				testing.expect(t, !second_ok)
+				if first_ok {
+					testing.expect_value(t, first, Named_String("map-0"))
+				}
+				saw_map_prefix = true
+			}
+		}
+		cleanup_owning_destination(&destination, allocator)
+		testing.expect_value(t, state.live_count, 0)
+		testing.expect_value(t, state.foreign_release_count, 0)
+		if saw_success {
+			break
+		}
+	}
+	testing.expect(t, saw_partial)
+	testing.expect(t, saw_map_prefix)
+	testing.expect(t, saw_success)
+}
+
+@(test)
+unmarshal_external_lifetime_success_and_partial_installation_cleanup :: proc(t: ^testing.T) {
+	input := `fixed = ["fixed-0", "fixed-1"]
+
+enumerated = ["enum-0", "enum-1"]
+
+slice = ["slice-0", "slice-1"]
+
+items = ["dynamic-0", "dynamic-1"]
+
+mapping = { first = "map-0", second = "map-1" }
+
+pointer = { text = "pointer" }
+
+optional = { text = "optional" }
+
+empty = {}
+`
+
+	complete_arena: mem.Dynamic_Arena
+	mem.dynamic_arena_init(&complete_arena)
+	complete_external: test_support.External_Lifetime_Allocator
+	test_support.external_lifetime_allocator_init(
+		&complete_external, mem.dynamic_arena_allocator(&complete_arena), true,
+	)
+	complete_allocator := test_support.external_lifetime_allocator(&complete_external)
+	complete: Owning_Destination
+	complete_error := toml.unmarshal_string(input, &complete, allocator = complete_allocator)
+	testing.expect(t, complete_error == nil)
+	testing.expect(t, owning_destination_has_commits(&complete))
+	complete = {}
+	mem.dynamic_arena_destroy(&complete_arena)
+	testing.expect_value(t, complete_external.release_attempt_count, 0)
+
+	saw_partial := false
+	for failure_ordinal in 1..=256 {
+		arena: mem.Dynamic_Arena
+		mem.dynamic_arena_init(&arena)
+		events: [2048]test_support.Allocator_Event
+		live: [512]test_support.Live_Allocation
+		observed: test_support.Observed_Allocator
+		test_support.observed_allocator_init(
+			&observed, mem.dynamic_arena_allocator(&arena), events[:], live[:],
+		)
+		observed.fail_at_allocation = failure_ordinal
+		external: test_support.External_Lifetime_Allocator
+		test_support.external_lifetime_allocator_init(
+			&external, test_support.observed_allocator(&observed), true,
+		)
+		allocator := test_support.external_lifetime_allocator(&external)
+		partial: Owning_Destination
+		err := toml.unmarshal_string(input, &partial, allocator = allocator)
+		if err != nil && owning_destination_has_commits(&partial) {
+			saw_partial = true
+			_, exact := err.(runtime.Allocator_Error)
+			testing.expect(t, exact)
+		}
+		partial = {}
+		mem.dynamic_arena_destroy(&arena)
+		testing.expect_value(t, external.release_attempt_count, 0)
+		testing.expect_value(t, observed.foreign_release_count, 0)
+		if saw_partial {
+			break
+		}
+	}
+	testing.expect(t, saw_partial)
+}
+
+@(test)
+unmarshal_installs_empty_and_zero_size_container_states :: proc(t: ^testing.T) {
+	events: [128]test_support.Allocator_Event
+	live: [64]test_support.Live_Allocation
+	state: test_support.Observed_Allocator
+	test_support.observed_allocator_init(&state, context.allocator, events[:], live[:])
+	allocator := test_support.observed_allocator(&state)
+
+	destination: Owning_Empty_Containers
+	err := toml.unmarshal_string(
+		`slice = [{}, {}]
+items = [{}, {}]
+mapping = {}
+`,
+		&destination,
+		allocator = allocator,
+	)
+	testing.expect(t, err == nil)
+	testing.expect_value(t, len(destination.slice), 2)
+	testing.expect(t, raw_data(destination.slice) == nil)
+	testing.expect_value(t, len(destination.items), 2)
+	testing.expect(t, raw_data(destination.items) == nil)
+	testing.expect(t, destination.items.allocator.procedure == allocator.procedure)
+	testing.expect(t, destination.items.allocator.data == allocator.data)
+	testing.expect_value(t, len(destination.mapping), 0)
+	testing.expect(t, destination.mapping.allocator.procedure == allocator.procedure)
+	testing.expect(t, destination.mapping.allocator.data == allocator.data)
+	assert(delete(destination.items) == nil)
+	assert(delete(destination.mapping) == nil)
+	destination = {}
+	testing.expect_value(t, state.live_count, 0)
+	testing.expect_value(t, state.foreign_release_count, 0)
 }
 
 @(test)
@@ -266,7 +761,7 @@ Temporal_Mismatch :: struct {value: temporal.Local_Date}
 Owned_Array_Child :: struct {values: [1]string}
 
 @(test)
-unmarshal_reports_deferred_owning_slots_and_stable_diagnostics :: proc(t: ^testing.T) {
+unmarshal_enforces_clean_owning_slots_and_stable_diagnostics :: proc(t: ^testing.T) {
 	owned := Deferred_String{text = "application"}
 	owned_before := owned
 	owned_error := toml.unmarshal_string("text = \"source\"\n", &owned)
@@ -283,16 +778,10 @@ unmarshal_reports_deferred_owning_slots_and_stable_diagnostics :: proc(t: ^testi
 
 	clean: Deferred_String
 	clean_error := toml.unmarshal_string("text = \"source\"\n", &clean)
-	testing.expect_value(t, clean, Deferred_String{})
-	clean_diagnostic, clean_ok := clean_error.(toml.Unmarshal_Diagnostic)
-	testing.expect(t, clean_ok)
-	if clean_ok {
-		data, ok := clean_diagnostic.detail.(toml.Unmarshal_Data_Error)
-		testing.expect(t, ok)
-		if ok {
-			testing.expect_value(t, data.kind, toml.Unmarshal_Data_Error_Kind.Unsupported_Destination_Type)
-		}
-	}
+	testing.expect(t, clean_error == nil)
+	testing.expect_value(t, clean.text, "source")
+	assert(delete(clean.text) == nil)
+	clean.text = ""
 
 	temporal_destination := Temporal_Mismatch{value = {2026, 1, 1}}
 	temporal_before := temporal_destination

@@ -34,6 +34,16 @@ Typed marshal consults an exact registered source `typeid` before generic, named
 
 A callback borrows its source `any` and every pointer reachable through it only until return. It must not retain those borrows, mutate the marshal source, or directly or indirectly re-enter `marshal`, `marshal_to_writer`, `unmarshal`, or `unmarshal_string` during the active callback. Construct semantic values directly; semantic clone/destruction and temporal operations remain available under their normal ownership contracts.
 
+## Typed unmarshal ownership
+
+Typed unmarshal strictly parses and preflights the complete binding before installation. Matched owning slots must be exactly zero; allocation-free scalar defaults are allowed. Missing and `toml:"-"` fields are neither inspected nor changed. Every installed string, container, map key, pointer, and owning child belongs to the allocator passed to `unmarshal` or `unmarshal_string`; input storage is never installed by alias.
+
+An installation allocation failure can leave earlier ownership-safe units installed. Strings commit only after cloning, slices and dynamic arrays install their storage before elements, pointers install their allocation before pointee children, optional unions activate their sole alternative before children, and maps commit only complete key/value pairs in semantic insertion order. The destination owns every committed unit immediately, including on error.
+
+There is intentionally no generic typed destructor. With an arbitrary-order individually freeing allocator, recursively clean children before containers: delete and zero strings; clean slice or dynamic-array elements before deleting and zeroing the container; clean owned map keys and values before deleting and zeroing the map; clean a pointee before freeing and niling its pointer; and clean an optional union's active alternative before setting it to nil. Struct and fixed-array cleanup recursively visits owning fields or elements. With an external-lifetime allocator, zero or discard owning slots without individual deletion, then reclaim the allocator's complete lifetime. A wholly zero-start projected destination is the generally safe mechanical-cleanup pattern after partial installation; pre-existing ownership in missing or ignored fields needs application-specific provenance.
+
+The executable [`examples/typed_unmarshal_cleanup`](examples/typed_unmarshal_cleanup/main.odin) demonstrates complete and partial cleanup for both individually freeing and external-lifetime allocators.
+
 ## Reproducible checks
 
 The supported compiler is pinned in [`toolchain/odin.lock`](toolchain/odin.lock). With that compiler on `PATH`:

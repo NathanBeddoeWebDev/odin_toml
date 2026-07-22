@@ -1,6 +1,7 @@
 package table_parse_test
 
 import "base:runtime"
+import "core:fmt"
 import "core:mem"
 import "core:testing"
 import toml "../.."
@@ -555,6 +556,19 @@ parse_stateful_input :: proc(
 	return toml.parse_string(input, allocator = allocator)
 }
 
+make_wide_table_input :: proc(key_count: int) -> [dynamic]byte {
+	input, allocation_error := make([dynamic]byte, 0, key_count*16)
+	assert(allocation_error == nil)
+	for index in 0..<key_count {
+		line := fmt.aprintf("key-%03d = 0\n", index)
+		for byte in transmute([]byte)line {
+			append(&input, byte)
+		}
+		delete(line)
+	}
+	return input
+}
+
 run_stateful_allocation_sweep :: proc(t: ^testing.T, input: string, use_bytes: bool) {
 	backing := context.allocator
 	baseline_events: [2048]test_support.Allocator_Event
@@ -749,6 +763,58 @@ name = "nested"
 `
 	run_stateful_allocation_sweep(t, input, false)
 	run_stateful_allocation_sweep(t, input, true)
+}
+
+@(test)
+test_wide_child_index_preserves_order_diagnostics_and_exact_oom :: proc(t: ^testing.T) {
+	input := make_wide_table_input(130)
+	defer delete(input)
+	text := string(input[:])
+	doc, err := toml.parse_string(text)
+	testing.expect(t, err == nil)
+	if err == nil {
+		testing.expect_value(t, len(doc.root), 130)
+		testing.expect_value(t, doc.root[0].key, "key-000")
+		testing.expect_value(t, doc.root[129].key, "key-129")
+		toml.destroy_document(&doc)
+	}
+
+	// This width crosses the private-index threshold, so every added scratch
+	// allocation participates in the existing exact-error and cleanup sweep.
+	run_stateful_allocation_sweep(t, text, false)
+
+	duplicate_start := len(input)
+	duplicate := "key-000 = 1\n"
+	for byte in transmute([]byte)duplicate {
+		append(&input, byte)
+	}
+	text = string(input[:])
+	duplicate_doc, duplicate_error := toml.parse_string(text)
+	testing.expect(t, document_is_zero(duplicate_doc))
+	if duplicate_error == nil {
+		toml.destroy_document(&duplicate_doc)
+		return
+	}
+	diagnostic, diagnostic_ok := parse_diagnostic_from(duplicate_error)
+	testing.expect(t, diagnostic_ok)
+	if !diagnostic_ok {
+		return
+	}
+	definition, definition_ok := diagnostic.detail.(toml.Parse_Definition_Error)
+	testing.expect(t, definition_ok)
+	if definition_ok {
+		testing.expect_value(t, definition.kind, toml.Parse_Definition_Error_Kind.Duplicate_Key)
+	}
+	testing.expect_value(t, diagnostic.primary, toml.Source_Range{
+		ascii_source_position(text, duplicate_start),
+		ascii_source_position(text, duplicate_start+len("key-000")),
+	})
+	testing.expect(t, diagnostic.related.ok)
+	if diagnostic.related.ok {
+		testing.expect_value(t, diagnostic.related.value, toml.Source_Range{
+			ascii_source_position(text, 0), ascii_source_position(text, len("key-000 = 0")),
+		})
+	}
 }
 
 @(test)

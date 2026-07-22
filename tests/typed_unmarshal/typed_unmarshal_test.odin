@@ -1,6 +1,7 @@
 package typed_unmarshal_test
 
 import "base:runtime"
+import "core:fmt"
 import "core:mem"
 import "core:strings"
 import "core:testing"
@@ -1004,6 +1005,124 @@ unmarshal_configuration_precedes_parsing :: proc(t: ^testing.T) {
 	)
 	testing.expect_value(t, registry_error, toml.Unmarshal_Configuration_Error.Invalid_Codec_Registry)
 	testing.expect_value(t, destination, Config_Destination{22})
+}
+
+make_wide_unmarshal_input :: proc(key_count: int) -> [dynamic]byte {
+	input, allocation_error := make([dynamic]byte, 0, key_count*16)
+	assert(allocation_error == nil)
+	for index in 0..<key_count {
+		line := fmt.aprintf("key-%03d = 0\n", index)
+		for byte in transmute([]byte)line {
+			append(&input, byte)
+		}
+		delete(line)
+	}
+	return input
+}
+
+cleanup_wide_unmarshal_map :: proc(
+	destination: ^map[string]i64,
+	allocator: runtime.Allocator,
+) {
+	for key in destination^ {
+		assert(delete(key, allocator) == nil)
+	}
+	if destination^.allocator.procedure != nil {
+		assert(delete(destination^) == nil)
+	}
+	destination^ = nil
+}
+
+@(test)
+unmarshal_wide_retained_index_preserves_exact_oom_and_external_lifetime :: proc(t: ^testing.T) {
+	input := make_wide_unmarshal_input(130)
+	defer delete(input)
+	backing := context.allocator
+
+	baseline_events: [2048]test_support.Allocator_Event
+	baseline_live: [512]test_support.Live_Allocation
+	baseline: test_support.Observed_Allocator
+	test_support.observed_allocator_init(
+		&baseline, backing, baseline_events[:], baseline_live[:],
+	)
+	baseline_allocator := test_support.observed_allocator(&baseline)
+	baseline_destination: map[string]i64
+	baseline_error := toml.unmarshal(
+		input[:], &baseline_destination, allocator = baseline_allocator,
+	)
+	testing.expect(t, baseline_error == nil)
+	allocation_count := baseline.allocation_request_count
+	testing.expect(t, allocation_count > 0)
+	cleanup_wide_unmarshal_map(&baseline_destination, baseline_allocator)
+	testing.expect_value(t, baseline.live_count, 0)
+	testing.expect_value(t, baseline.foreign_release_count, 0)
+
+	saw_wrapped_parse_failure := false
+	saw_outer_failure := false
+	for failure_ordinal in 1..=allocation_count+1 {
+		events: [2048]test_support.Allocator_Event
+		live: [512]test_support.Live_Allocation
+		observed: test_support.Observed_Allocator
+		test_support.observed_allocator_init(&observed, backing, events[:], live[:])
+		observed.fail_at_allocation = failure_ordinal
+		observed.failure_error = .Invalid_Argument
+		selected := test_support.observed_allocator(&observed)
+		rejecting: test_support.Rejecting_Allocator
+		context.allocator = test_support.rejecting_allocator(&rejecting)
+		destination: map[string]i64
+		err := toml.unmarshal(input[:], &destination, allocator = selected)
+		context.allocator = backing
+
+		if failure_ordinal <= allocation_count {
+			testing.expect(t, err != nil)
+			if wrapped, wrapped_ok := err.(toml.Unmarshal_Parse_Error); wrapped_ok {
+				allocator_error, exact := wrapped.error.(runtime.Allocator_Error)
+				testing.expect(t, exact)
+				if exact {
+					testing.expect_value(
+						t, allocator_error, runtime.Allocator_Error.Invalid_Argument,
+					)
+				}
+				saw_wrapped_parse_failure = true
+			} else {
+				allocator_error, exact := err.(runtime.Allocator_Error)
+				testing.expect(t, exact)
+				if exact {
+					testing.expect_value(
+						t, allocator_error, runtime.Allocator_Error.Invalid_Argument,
+					)
+				}
+				saw_outer_failure = true
+			}
+		} else {
+			testing.expect(t, err == nil)
+			testing.expect_value(t, len(destination), 130)
+		}
+		cleanup_wide_unmarshal_map(&destination, selected)
+		testing.expect_value(t, observed.live_count, 0)
+		testing.expect_value(t, observed.foreign_release_count, 0)
+		testing.expect_value(t, rejecting.allocation_attempt_count, 0)
+	}
+	testing.expect(t, saw_wrapped_parse_failure)
+	testing.expect(t, saw_outer_failure)
+
+	arena: mem.Dynamic_Arena
+	mem.dynamic_arena_init(&arena)
+	external: test_support.External_Lifetime_Allocator
+	test_support.external_lifetime_allocator_init(
+		&external, mem.dynamic_arena_allocator(&arena), true,
+	)
+	external_destination: map[string]i64
+	external_error := toml.unmarshal(
+		input[:],
+		&external_destination,
+		allocator = test_support.external_lifetime_allocator(&external),
+	)
+	testing.expect(t, external_error == nil)
+	testing.expect_value(t, len(external_destination), 130)
+	external_destination = nil
+	mem.dynamic_arena_destroy(&arena)
+	testing.expect_value(t, external.release_attempt_count, 0)
 }
 
 @(test)

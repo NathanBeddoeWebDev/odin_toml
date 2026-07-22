@@ -15,9 +15,11 @@ Parser_State :: struct {
 	input:     string,
 	allocator: runtime.Allocator,
 	gate:      Allocator_Release_Gate,
-	root:         Table,
-	nodes:          Parser_Node_Array,
-	binding_ranges: Binding_Range_Node_Array,
+	root:              Table,
+	nodes:             Parser_Node_Array,
+	child_index:       Parser_Child_Index,
+	child_index_count: int,
+	binding_ranges:    Binding_Range_Node_Array,
 	capture_binding_ranges: bool,
 	last_binding_range_id: int,
 	active_table:   int,
@@ -1563,6 +1565,7 @@ validate_comment :: proc(
 
 @(private)
 parser_cleanup :: proc(state: ^Parser_State) {
+	parser_release_child_index(state)
 	parser_release_nodes(state)
 	parser_release_binding_ranges(state)
 	destroy_table_with_gate(&state.root, &state.gate, state.loc)
@@ -1575,6 +1578,7 @@ parse_document_internal :: proc(
 	allocator: runtime.Allocator,
 	loc: runtime.Source_Code_Location,
 	retained_nodes: ^Parser_Node_Array = nil,
+	retained_child_index: ^Parser_Child_Index = nil,
 	retained_ranges: ^Binding_Range_Node_Array = nil,
 ) -> (Document, Parse_Error) {
 	if allocator.procedure == nil {
@@ -1659,6 +1663,13 @@ parse_document_internal :: proc(
 		}
 	}
 
+	if retained_child_index == nil {
+		parser_release_child_index(&state)
+	} else {
+		retained_child_index^ = state.child_index
+		state.child_index = {}
+		state.child_index_count = 0
+	}
 	if retained_nodes == nil {
 		parser_release_nodes(&state)
 	} else {
@@ -1696,11 +1707,12 @@ parse_ranged_document :: proc(
 ) -> (
 	document: Document,
 	nodes: Parser_Node_Array,
+	child_index: Parser_Child_Index,
 	ranges: Binding_Range_Node_Array,
 	err: Parse_Error,
 ) {
 	document, err = parse_document_internal(
-		input, options, allocator, loc, &nodes, &ranges,
+		input, options, allocator, loc, &nodes, &child_index, &ranges,
 	)
 	return
 }
@@ -1708,6 +1720,7 @@ parse_ranged_document :: proc(
 @(private)
 destroy_ranged_parse_state :: proc(
 	nodes: ^Parser_Node_Array,
+	child_index: ^Parser_Child_Index,
 	ranges: ^Binding_Range_Node_Array,
 	allocator: runtime.Allocator,
 	loc: runtime.Source_Code_Location,
@@ -1722,6 +1735,15 @@ destroy_ranged_parse_state :: proc(
 			loc,
 		)
 		nodes^ = {}
+	}
+	if child_index != nil {
+		release_owned_memory(
+			&gate,
+			raw_data(child_index^),
+			cap(child_index^)*size_of(Parser_Child_Index_Entry),
+			loc,
+		)
+		child_index^ = {}
 	}
 	if ranges != nil {
 		release_owned_memory(

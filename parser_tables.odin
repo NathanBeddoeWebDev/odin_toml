@@ -1,6 +1,7 @@
 package toml
 
 import "base:runtime"
+import "core:hash"
 import "core:mem"
 
 @(private)
@@ -35,6 +36,18 @@ Parser_Node :: struct {
 
 @(private)
 Parser_Node_Array :: distinct [dynamic]Parser_Node
+
+@(private)
+Parser_Child_Index_Entry :: struct {
+	hash:    u64,
+	node_id: int,
+}
+
+@(private)
+Parser_Child_Index :: distinct [dynamic]Parser_Child_Index_Entry
+
+@(private)
+PARSER_CHILD_INDEX_THRESHOLD :: 128
 
 @(private)
 parser_make_binding_ranges :: proc(
@@ -362,12 +375,133 @@ parser_node_for_array_element :: proc(state: ^Parser_State, parent, element_inde
 }
 
 @(private)
+parser_child_hash :: proc(parent: int, key: string) -> u64 {
+	seed := u64(parent) ~ 0x9e3779b97f4a7c15
+	return hash.fnv64a(transmute([]byte)key, seed)
+}
+
+@(private)
+parser_child_key :: proc(state: ^Parser_State, node_id: int) -> string {
+	node := state.nodes[node_id-1]
+	assert(node.location == .Table_Entry)
+	table, ok := parser_node_table(state, node.parent)
+	assert(ok && 0 <= node.semantic_index && node.semantic_index < len(table))
+	return table[node.semantic_index].key
+}
+
+@(private)
+parser_child_index_insert :: proc(
+	state: ^Parser_State,
+	index: ^Parser_Child_Index,
+	node_id: int,
+) {
+	node := state.nodes[node_id-1]
+	assert(node.location == .Table_Entry && len(index^) > 0)
+	key := parser_child_key(state, node_id)
+	key_hash := parser_child_hash(node.parent, key)
+	slot := int(key_hash&u64(len(index^)-1))
+	for index^[slot].node_id != 0 {
+		slot = (slot+1)&(len(index^)-1)
+	}
+	index^[slot] = {hash = key_hash, node_id = node_id}
+}
+
+@(private)
+parser_make_child_index :: proc(
+	state: ^Parser_State,
+	capacity, start, end: int,
+) -> (Parser_Child_Index, Parse_Error) {
+	if capacity <= 0 || capacity&(capacity-1) != 0 ||
+	   capacity > max(int)/size_of(Parser_Child_Index_Entry) {
+		return {}, parse_limit_error(
+			state, .Size_Overflow, start, end, .Current,
+		)
+	}
+	memory, allocation_error := allocator_allocate(
+		capacity*size_of(Parser_Child_Index_Entry), state.allocator, true, state.loc,
+	)
+	if allocation_error != nil {
+		return {}, allocation_error
+	}
+	if memory == nil {
+		return {}, runtime.Allocator_Error.Out_Of_Memory
+	}
+	raw := runtime.Raw_Dynamic_Array{memory, capacity, capacity, state.allocator}
+	return transmute(Parser_Child_Index)raw, nil
+}
+
+@(private)
+parser_reserve_child_index :: proc(
+	state: ^Parser_State,
+	start, end: int,
+) -> Parse_Error {
+	prospective_count := state.child_index_count+1
+	capacity := len(state.child_index)
+	if capacity == 0 {
+		if prospective_count < PARSER_CHILD_INDEX_THRESHOLD {
+			return nil
+		}
+		capacity = PARSER_CHILD_INDEX_THRESHOLD*2
+	} else if prospective_count <= capacity/2 {
+		return nil
+	} else if capacity > max(int)/2 {
+		return parse_limit_error(state, .Size_Overflow, start, end, .Current)
+	} else {
+		capacity *= 2
+	}
+	replacement, err := parser_make_child_index(state, capacity, start, end)
+	if err != nil {
+		return err
+	}
+	for node, node_index in state.nodes {
+		if node.location == .Table_Entry {
+			parser_child_index_insert(state, &replacement, node_index+1)
+		}
+	}
+	old := state.child_index
+	state.child_index = replacement
+	release_owned_memory(
+		&state.gate,
+		raw_data(old),
+		cap(old)*size_of(Parser_Child_Index_Entry),
+		state.loc,
+	)
+	return nil
+}
+
+@(private)
+parser_release_child_index :: proc(state: ^Parser_State) {
+	release_owned_memory(
+		&state.gate,
+		raw_data(state.child_index),
+		cap(state.child_index)*size_of(Parser_Child_Index_Entry),
+		state.loc,
+	)
+	state.child_index = {}
+	state.child_index_count = 0
+}
+
+@(private)
 parser_find_child :: proc(state: ^Parser_State, parent: int, key: string) -> int {
+	if len(state.child_index) > 0 {
+		key_hash := parser_child_hash(parent, key)
+		slot := int(key_hash&u64(len(state.child_index)-1))
+		for state.child_index[slot].node_id != 0 {
+			entry := state.child_index[slot]
+			node := state.nodes[entry.node_id-1]
+			if entry.hash == key_hash && node.parent == parent &&
+			   parser_child_key(state, entry.node_id) == key {
+				return entry.node_id
+			}
+			slot = (slot+1)&(len(state.child_index)-1)
+		}
+		return 0
+	}
 	table, ok := parser_node_table(state, parent)
 	assert(ok)
-	for entry, index in table {
+	for entry, entry_index in table {
 		if entry.key == key {
-			node_id := parser_node_for_entry(state, parent, index)
+			node_id := parser_node_for_entry(state, parent, entry_index)
 			assert(node_id != 0)
 			return node_id
 		}
@@ -388,12 +522,24 @@ parser_append_child :: proc(
 ) -> (int, Parse_Error) {
 	table, ok := parser_node_table(state, parent)
 	assert(ok)
+	if state.child_index_count == max(int) {
+		return 0, parse_limit_error(
+			state, .Size_Overflow, start, end, .Current,
+		)
+	}
+	prospective_child_count := state.child_index_count+1
+	if len(state.child_index) > 0 ||
+	   prospective_child_count == PARSER_CHILD_INDEX_THRESHOLD {
+		if err := parser_reserve_child_index(state, start, end); err != nil {
+			return 0, err
+		}
+	}
 	entry_index := len(table)
 	if err := parser_append_table_value(state, &table, key, value, start, end); err != nil {
 		return 0, err
 	}
 	parser_store_node_table(state, parent, table)
-	return parser_append_node(
+	node_id, node_error := parser_append_node(
 		state,
 		Parser_Node{
 			parent = parent,
@@ -408,6 +554,14 @@ parser_append_child :: proc(
 		start,
 		end,
 	)
+	if node_error != nil {
+		return 0, node_error
+	}
+	state.child_index_count += 1
+	if len(state.child_index) > 0 {
+		parser_child_index_insert(state, &state.child_index, node_id)
+	}
+	return node_id, nil
 }
 
 @(private)

@@ -23,6 +23,14 @@ The committed [`baselines/performance-darwin-arm64.json`](baselines/performance-
 - canonical marshal of a reverse-inserted 256-entry map, including key sorting;
 - a 128-element paired-codec marshal/unmarshal path through a frozen registry.
 
+Wide-document scaling can be investigated separately without changing the fixed baseline schema:
+
+```sh
+odin run benchmarks -o:speed -vet -vet-style -warnings-as-errors -- wide-scaling
+```
+
+This generates flat 100-, 1,000-, and 10,000-key documents outside the timed region and reports five samples each for parse plus destruction and typed map unmarshal plus exact destination cleanup. Compare nanoseconds per key across widths to characterize scaling for these generated fixtures; this is not a worst-case complexity guarantee.
+
 Raw timings vary with host load, hardware, and compiler environment. Compare them manually as investigative evidence only.
 
 ## Reproduce encoded-size observations

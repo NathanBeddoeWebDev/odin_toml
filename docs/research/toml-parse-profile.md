@@ -151,3 +151,51 @@ ordinary parse category moved from 19.48 us to 19.76 us, consistent with noise
 because ordinary parsing does not retain binding ranges. These observations are
 non-gating and requested-byte totals remain cumulative rather than peak-live
 measurements.
+
+## Lazy source positions and wide-document follow-up
+
+A subsequent pass started at `d5816e7` and recorded three complete benchmark
+invocations before and after each coherent change. Replacing internal retained
+`Source_Range` values with byte ranges, including inline-container definition
+scratch, and materializing line/column positions only for an emitted unmarshal
+or codec diagnostic changed the median of invocation medians as follows:
+
+| Category | Before | Lazy byte ranges | Change |
+| --- | ---: | ---: | ---: |
+| Ordinary mixed parse | 19.89 us | 19.21 us | -3.4% |
+| Typed unmarshal | 13.70 us | 12.78 us | -6.7% |
+| Codec-heavy marshal/unmarshal | 194.54 us | 155.25 us | -20.2% |
+| 64-level container parse | 110.74 us | 33.49 us | -69.8% |
+
+The larger container result came from ordinary array and inline-table parses
+that still evaluated `source_range` before the disabled binding-range capture
+check. Existing diagnostic acceptance, mutable-input lifetime, allocator, and
+full conformance gates remained exact.
+
+Flat unique-key documents exposed the next scaling limit. Before indexing, parse
+cost per key rose from about 790 ns at 100 keys to 5,137 ns at 10,000 keys, and
+typed map unmarshal rose from 1,364 ns to 12,986 ns per key. A five-second CPU
+sample placed 3,279 of roughly 5,000 top-of-stack samples in
+`parser_find_child`. A parser-private open-addressed index, enabled at 128 table
+entries and retained only through typed binding, produced these three-invocation
+medians from the committed `wide-scaling` benchmark mode:
+
+| Keys | Parse before | Parse indexed | Typed before | Typed indexed |
+| ---: | ---: | ---: | ---: | ---: |
+| 100 | 0.079 ms | 0.083 ms | 0.136 ms | 0.140 ms |
+| 1,000 | 1.257 ms | 0.906 ms | 2.140 ms | 1.493 ms |
+| 10,000 | 51.366 ms | 9.270 ms | 129.855 ms | 15.434 ms |
+
+The indexed 10,000-key cases were 82.0% faster for parse and 88.1% faster for
+typed unmarshal. Final cost stayed near 830--927 ns/key for parse and
+1,400--1,543 ns/key for typed unmarshal. The 100-key cases moved by +5.1% and
++2.6%, respectively; the fixed recorder's smaller mixed parse improved slightly,
+while typed and codec-heavy categories moved by +1.8% and +1.2% from the lazy
+checkpoint.
+
+At 1,000 keys the index added four scratch allocation requests and 61,440
+cumulative requested bytes; final capacity was 32 KiB, and live allocation count
+at public return was unchanged. Ordinary parse releases the index before
+return, while ranged parse transfers it to typed binding and releases it before
+return. A rejecting-allocator sweep above the activation threshold covers every
+new allocation ordinal and exact allocator error propagation.

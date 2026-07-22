@@ -153,6 +153,50 @@ make_depth_input :: proc(depth: int) -> [dynamic]byte {
 	return buffer
 }
 
+make_wide_input :: proc(key_count: int) -> [dynamic]byte {
+	buffer, allocation_error := make([dynamic]byte, 0, key_count*16)
+	assert(allocation_error == nil)
+	for index in 0..<key_count {
+		line := fmt.aprintf("key-%05d = 0\n", index)
+		append_text(&buffer, line)
+		delete(line)
+	}
+	return buffer
+}
+
+benchmark_wide_parse :: proc(input: []byte, iterations: int) -> (i64, u64) {
+	checksum: u64
+	start := time.tick_now()
+	for _ in 0..<iterations {
+		document, err := toml.parse_bytes(input)
+		assert(err == nil)
+		checksum += u64(len(document.root))
+		toml.destroy_document(&document)
+	}
+	return elapsed_nanoseconds(start, time.tick_now()), checksum
+}
+
+cleanup_wide_map :: proc(mapping: ^map[string]i64) {
+	for key in mapping^ {
+		assert(delete(key) == nil)
+	}
+	assert(delete(mapping^) == nil)
+	mapping^ = nil
+}
+
+benchmark_wide_unmarshal :: proc(input: []byte, iterations: int) -> (i64, u64) {
+	checksum: u64
+	start := time.tick_now()
+	for _ in 0..<iterations {
+		destination: map[string]i64
+		err := toml.unmarshal(input, &destination)
+		assert(err == nil)
+		checksum += u64(len(destination))
+		cleanup_wide_map(&destination)
+	}
+	return elapsed_nanoseconds(start, time.tick_now()), checksum
+}
+
 benchmark_depth :: proc(iterations: int) -> (i64, u64) {
 	input := make_depth_input(64)
 	defer delete(input)
@@ -290,6 +334,33 @@ run_performance :: proc() {
 	emit_benchmark("codec-heavy", 50, benchmark_codec_heavy)
 }
 
+emit_scaling_benchmark :: proc(
+	name: string,
+	key_count, operations: int,
+	procedure: proc(input: []byte, iterations: int) -> (i64, u64),
+) {
+	input := make_wide_input(key_count)
+	defer delete(input)
+	_, _ = procedure(input[:], 1)
+	for _ in 0..<SAMPLE_COUNT {
+		elapsed, checksum := procedure(input[:], operations)
+		assert(elapsed > 0)
+		fmt.printf(
+			"scaling\t%s\t%d\t%d\t%d\t%d\n",
+			name, key_count, operations, elapsed, checksum,
+		)
+	}
+}
+
+run_wide_scaling :: proc() {
+	emit_scaling_benchmark("parse", 100, 500, benchmark_wide_parse)
+	emit_scaling_benchmark("parse", 1000, 50, benchmark_wide_parse)
+	emit_scaling_benchmark("parse", 10000, 5, benchmark_wide_parse)
+	emit_scaling_benchmark("typed-unmarshal", 100, 300, benchmark_wide_unmarshal)
+	emit_scaling_benchmark("typed-unmarshal", 1000, 30, benchmark_wide_unmarshal)
+	emit_scaling_benchmark("typed-unmarshal", 10000, 3, benchmark_wide_unmarshal)
+}
+
 emit_size :: proc(name: string, input: []byte) {
 	doc, parse_error := toml.parse_bytes(input)
 	assert(parse_error == nil)
@@ -314,7 +385,7 @@ run_encoded_sizes :: proc() {
 
 main :: proc() {
 	if len(os.args) != 2 {
-		fmt.eprintln("usage: benchmarks <performance|encoded-size>")
+		fmt.eprintln("usage: benchmarks <performance|encoded-size|wide-scaling>")
 		os.exit(2)
 	}
 	switch os.args[1] {
@@ -322,8 +393,10 @@ main :: proc() {
 		run_performance()
 	case "encoded-size":
 		run_encoded_sizes()
+	case "wide-scaling":
+		run_wide_scaling()
 	case:
-		fmt.eprintln("usage: benchmarks <performance|encoded-size>")
+		fmt.eprintln("usage: benchmarks <performance|encoded-size|wide-scaling>")
 		os.exit(2)
 	}
 }

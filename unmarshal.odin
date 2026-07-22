@@ -510,7 +510,24 @@ unmarshal_source_for_entry :: proc(
 	key_source, value_source: Source_Byte_Range,
 ) {
 	if parent_node >= 0 {
-		node_id = parser_node_for_entry(&state.parser, parent_node, entry_index)
+		if len(state.parser.child_index) > 0 {
+			parent_table: Table
+			parent_is_table := parent_node == 0
+			if parent_is_table {
+				parent_table = state.parser.root
+			} else if parent_value, parent_ok := parser_node_value(
+				&state.parser, parent_node,
+			); parent_ok {
+				parent_table, parent_is_table = parent_value.(Table)
+			}
+			if parent_is_table && 0 <= entry_index && entry_index < len(parent_table) {
+				node_id = parser_find_child(
+					&state.parser, parent_node, parent_table[entry_index].key,
+				)
+			}
+		} else {
+			node_id = parser_node_for_entry(&state.parser, parent_node, entry_index)
+		}
 		if node_id == 0 {
 			node_id = parser_node_for_array_element(&state.parser, parent_node, entry_index)
 		}
@@ -1787,14 +1804,16 @@ unmarshal_document :: proc(
 	if configuration_error != nil {
 		return configuration_error
 	}
-	document, nodes, ranges, parse_error := parse_ranged_document(
+	document, nodes, child_index, ranges, parse_error := parse_ranged_document(
 		input, {max_depth = max_depth}, allocator, loc,
 	)
 	if parse_error != nil {
 		return Unmarshal_Parse_Error{error = parse_error}
 	}
 	defer destroy_document(&document, loc)
-	defer destroy_ranged_parse_state(&nodes, &ranges, allocator, loc)
+	defer destroy_ranged_parse_state(
+		&nodes, &child_index, &ranges, allocator, loc,
+	)
 
 	state := Unmarshal_State{
 		allocator = allocator,
@@ -1806,6 +1825,7 @@ unmarshal_document :: proc(
 	state.parser.input = input
 	state.parser.root = document.root
 	state.parser.nodes = nodes
+	state.parser.child_index = child_index
 	state.ranges = ranges
 	state.builder.allocator = allocator
 	state.builder.loc = loc

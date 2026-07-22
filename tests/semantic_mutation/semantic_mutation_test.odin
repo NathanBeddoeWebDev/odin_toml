@@ -39,7 +39,25 @@ mutation_diagnostic :: proc(
 	if detail_ok {
 		testing.expect_value(t, actual, kind)
 	}
+	if kind != .Invalid_Temporal {
+		testing.expect_value(t, diagnostic.temporal_error, temporal.Error.None)
+	}
+	expect_encode_path_metadata(t, diagnostic.path)
 	return diagnostic
+}
+
+expect_encode_path_metadata :: proc(t: ^testing.T, path: toml.Encode_Diagnostic_Path) {
+	if path.total_segment_count <= 32 {
+		testing.expect_value(t, path.segment_count, u8(path.total_segment_count))
+		testing.expect_value(t, path.prefix_count, u8(path.total_segment_count))
+		testing.expect_value(t, path.omitted_segment_count, u16(0))
+		testing.expect(t, !path.truncated)
+	} else {
+		testing.expect_value(t, path.segment_count, u8(32))
+		testing.expect_value(t, path.prefix_count, u8(8))
+		testing.expect_value(t, path.omitted_segment_count, path.total_segment_count-32)
+		testing.expect(t, path.truncated)
+	}
 }
 
 mutation_limit_diagnostic :: proc(
@@ -57,6 +75,8 @@ mutation_limit_diagnostic :: proc(
 	if detail_ok {
 		testing.expect_value(t, actual, kind)
 	}
+	testing.expect_value(t, diagnostic.temporal_error, temporal.Error.None)
+	expect_encode_path_metadata(t, diagnostic.path)
 	return diagnostic
 }
 
@@ -75,6 +95,10 @@ clone_data_diagnostic :: proc(
 	if detail_ok {
 		testing.expect_value(t, actual, kind)
 	}
+	if kind != .Invalid_Temporal {
+		testing.expect_value(t, diagnostic.temporal_error, temporal.Error.None)
+	}
+	expect_encode_path_metadata(t, diagnostic.path)
 	return diagnostic
 }
 

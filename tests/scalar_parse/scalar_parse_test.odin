@@ -67,6 +67,20 @@ parse_diagnostic_from :: proc(err: toml.Parse_Error) -> (toml.Parse_Diagnostic, 
 	return err.(toml.Parse_Diagnostic)
 }
 
+expect_parse_path_metadata :: proc(t: ^testing.T, path: toml.Parse_Diagnostic_Path) {
+	if path.total_segment_count <= 32 {
+		testing.expect_value(t, path.segment_count, u8(path.total_segment_count))
+		testing.expect_value(t, path.prefix_count, u8(path.total_segment_count))
+		testing.expect_value(t, path.omitted_segment_count, u16(0))
+		testing.expect(t, !path.truncated)
+	} else {
+		testing.expect_value(t, path.segment_count, u8(32))
+		testing.expect_value(t, path.prefix_count, u8(8))
+		testing.expect_value(t, path.omitted_segment_count, path.total_segment_count-32)
+		testing.expect(t, path.truncated)
+	}
+}
+
 expect_valid_through_both_overloads :: proc(t: ^testing.T, input: string) {
 	string_doc, string_error := toml.parse_string(input)
 	testing.expect(t, string_error == nil)
@@ -308,8 +322,11 @@ test_scalar_candidate_classification_and_boundaries_are_frozen :: proc(t: ^testi
 	}{
 		{"truex", .Invalid_Boolean, .None, 4, 5},
 		{"false_", .Invalid_Boolean, .None, 5, 6},
+		{"1979-13-01", .Invalid_Temporal, .Invalid_Month, 0, 10},
 		{"1979-02-29", .Invalid_Temporal, .Invalid_Day, 0, 10},
 		{"25:00", .Invalid_Temporal, .Invalid_Hour, 0, 5},
+		{"00:60", .Invalid_Temporal, .Invalid_Minute, 0, 5},
+		{"00:00:61", .Invalid_Temporal, .Invalid_Second, 0, 8},
 		{"1985-06-18T17:04:07+12:60", .Invalid_Temporal, .Invalid_Offset_Minutes, 0, 25},
 		{"0xG", .Invalid_Integer, .None, 2, 3},
 		{"+0x1", .Invalid_Integer, .None, 0, 1},
@@ -338,6 +355,8 @@ test_scalar_candidate_classification_and_boundaries_are_frozen :: proc(t: ^testi
 		testing.expect_value(t, diagnostic.primary.start.byte, 8+test_case.error_start)
 		testing.expect_value(t, diagnostic.primary.end.byte, 8+test_case.error_end)
 		testing.expect_value(t, diagnostic.path.segment_count, u8(1))
+		testing.expect_value(t, diagnostic.related, toml.Optional_Source_Range{})
+		expect_parse_path_metadata(t, diagnostic.path)
 	}
 }
 
@@ -365,6 +384,8 @@ test_lexical_and_grammar_diagnostics_remain_distinct :: proc(t: ^testing.T) {
 		lexical, lexical_ok := diagnostic.detail.(toml.Parse_Lexical_Error)
 		testing.expect(t, lexical_ok)
 		testing.expect_value(t, lexical, test_case.kind)
+		testing.expect_value(t, diagnostic.related, toml.Optional_Source_Range{})
+		expect_parse_path_metadata(t, diagnostic.path)
 	}
 
 	grammar_cases := [?]struct {
@@ -390,6 +411,8 @@ test_lexical_and_grammar_diagnostics_remain_distinct :: proc(t: ^testing.T) {
 		testing.expect_value(t, grammar.found, test_case.found)
 		testing.expect_value(t, diagnostic.primary.start.byte, test_case.range_start)
 		testing.expect_value(t, diagnostic.primary.end.byte, test_case.range_end)
+		testing.expect_value(t, diagnostic.related, toml.Optional_Source_Range{})
+		expect_parse_path_metadata(t, diagnostic.path)
 	}
 
 	unicode_space_doc, unicode_space_error := toml.parse_string("value = 1 \xc2\xa0\n")
@@ -435,6 +458,8 @@ test_whole_input_utf8_preflight_and_coordinates_are_exact :: proc(t: ^testing.T)
 	testing.expect_value(t, encoding, toml.Parse_Encoding_Error.Invalid_UTF8)
 	testing.expect_value(t, diagnostic.primary.start, toml.Source_Position{9, 2, 1})
 	testing.expect_value(t, diagnostic.primary.end, toml.Source_Position{10, 2, 1})
+	testing.expect_value(t, diagnostic.related, toml.Optional_Source_Range{})
+	testing.expect_value(t, diagnostic.path, toml.Parse_Diagnostic_Path{})
 
 	malformed := [?][]byte{
 		{0x80}, {0xc0, 0x80}, {0xe0, 0x80, 0x80}, {0xed, 0xa0, 0x80},

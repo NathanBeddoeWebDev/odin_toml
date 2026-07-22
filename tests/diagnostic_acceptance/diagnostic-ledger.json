@@ -1,0 +1,1458 @@
+{
+  "schema_version": 1,
+  "scope": "Every public error union alternative, diagnostic-detail union alternative, error/detail enum member, Parse_Syntax category, and Parse_Definition_Form in errors.odin; the public Codec_Callback_Error in codecs.odin; and every temporal.Error alternative in temporal/types.odin. Covered rows name public package-seam tests; inapplicable rows give construction proofs.",
+  "entries": [
+    {
+      "id": "Parse_Configuration_Error.Invalid_Allocator",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_configuration_precedence_is_nil_allocator_then_options_then_utf8"
+      ]
+    },
+    {
+      "id": "Parse_Configuration_Error.Invalid_Max_Depth",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_configuration_precedence_is_nil_allocator_then_options_then_utf8"
+      ]
+    },
+    {
+      "id": "Parse_Encoding_Error.Invalid_UTF8",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_whole_input_utf8_preflight_and_coordinates_are_exact"
+      ]
+    },
+    {
+      "id": "Parse_Lexical_Error.Illegal_Character",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_lexical_and_grammar_diagnostics_remain_distinct"
+      ]
+    },
+    {
+      "id": "Parse_Lexical_Error.Invalid_Newline",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_lexical_and_grammar_diagnostics_remain_distinct"
+      ]
+    },
+    {
+      "id": "Parse_Lexical_Error.Invalid_Comment_Character",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_lexical_and_grammar_diagnostics_remain_distinct"
+      ]
+    },
+    {
+      "id": "Parse_Lexical_Error.Unterminated_Basic_String",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_lexical_and_grammar_diagnostics_remain_distinct"
+      ]
+    },
+    {
+      "id": "Parse_Lexical_Error.Unterminated_Literal_String",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_lexical_and_grammar_diagnostics_remain_distinct"
+      ]
+    },
+    {
+      "id": "Parse_Lexical_Error.Invalid_String_Character",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_lexical_and_grammar_diagnostics_remain_distinct"
+      ]
+    },
+    {
+      "id": "Parse_Lexical_Error.Invalid_Escape",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_lexical_and_grammar_diagnostics_remain_distinct"
+      ]
+    },
+    {
+      "id": "Parse_Lexical_Error.Invalid_Unicode_Escape",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_lexical_and_grammar_diagnostics_remain_distinct"
+      ]
+    },
+    {
+      "id": "Parse_Lexical_Error.Invalid_Bare_Key",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_lexical_and_grammar_diagnostics_remain_distinct"
+      ]
+    },
+    {
+      "id": "Parse_Syntax.End_Of_Input",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_parse_grammar_syntax_matrix_is_structurally_exact"
+      ]
+    },
+    {
+      "id": "Parse_Syntax.End_Of_Line",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_parse_grammar_syntax_matrix_is_structurally_exact"
+      ]
+    },
+    {
+      "id": "Parse_Syntax.Key",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_parse_grammar_syntax_matrix_is_structurally_exact"
+      ]
+    },
+    {
+      "id": "Parse_Syntax.Equals",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_parse_grammar_syntax_matrix_is_structurally_exact"
+      ]
+    },
+    {
+      "id": "Parse_Syntax.Value",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_parse_grammar_syntax_matrix_is_structurally_exact"
+      ]
+    },
+    {
+      "id": "Parse_Syntax.Dot",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_parse_grammar_syntax_matrix_is_structurally_exact"
+      ]
+    },
+    {
+      "id": "Parse_Syntax.Comma",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_parse_grammar_syntax_matrix_is_structurally_exact"
+      ]
+    },
+    {
+      "id": "Parse_Syntax.Left_Bracket",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_parse_grammar_syntax_matrix_is_structurally_exact"
+      ]
+    },
+    {
+      "id": "Parse_Syntax.Right_Bracket",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_parse_grammar_syntax_matrix_is_structurally_exact"
+      ]
+    },
+    {
+      "id": "Parse_Syntax.Left_Brace",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_parse_grammar_syntax_matrix_is_structurally_exact"
+      ]
+    },
+    {
+      "id": "Parse_Syntax.Right_Brace",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_parse_grammar_syntax_matrix_is_structurally_exact"
+      ]
+    },
+    {
+      "id": "Parse_Syntax.Table_Header",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_parse_grammar_syntax_matrix_is_structurally_exact"
+      ]
+    },
+    {
+      "id": "Parse_Syntax.Array_Of_Tables_Header",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_parse_grammar_syntax_matrix_is_structurally_exact"
+      ]
+    },
+    {
+      "id": "Parse_Syntax.Expression_End",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_parse_grammar_syntax_matrix_is_structurally_exact"
+      ]
+    },
+    {
+      "id": "Parse_Syntax.Other",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_parse_grammar_syntax_matrix_is_structurally_exact"
+      ]
+    },
+    {
+      "id": "Parse_Value_Error_Kind.Invalid_Integer",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_scalar_candidate_classification_and_boundaries_are_frozen"
+      ]
+    },
+    {
+      "id": "Parse_Value_Error_Kind.Integer_Out_Of_Range",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_scalar_candidate_classification_and_boundaries_are_frozen"
+      ]
+    },
+    {
+      "id": "Parse_Value_Error_Kind.Invalid_Float",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_scalar_candidate_classification_and_boundaries_are_frozen"
+      ]
+    },
+    {
+      "id": "Parse_Value_Error_Kind.Float_Out_Of_Range",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_scalar_candidate_classification_and_boundaries_are_frozen"
+      ]
+    },
+    {
+      "id": "Parse_Value_Error_Kind.Invalid_Boolean",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_scalar_candidate_classification_and_boundaries_are_frozen"
+      ]
+    },
+    {
+      "id": "Parse_Value_Error_Kind.Invalid_Temporal",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_scalar_candidate_classification_and_boundaries_are_frozen"
+      ]
+    },
+    {
+      "id": "Parse_Value_Error_Kind.Invalid_Value",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_scalar_candidate_classification_and_boundaries_are_frozen"
+      ]
+    },
+    {
+      "id": "Parse_Definition_Form.Key_Value",
+      "status": "covered",
+      "tests": [
+        "tests/table_parse/table_parse_test.odin::test_definition_state_matrix_has_adjacent_permitted_and_forbidden_transitions"
+      ]
+    },
+    {
+      "id": "Parse_Definition_Form.Implicit_Table",
+      "status": "covered",
+      "tests": [
+        "tests/table_parse/table_parse_test.odin::test_definition_state_matrix_has_adjacent_permitted_and_forbidden_transitions"
+      ]
+    },
+    {
+      "id": "Parse_Definition_Form.Standard_Table",
+      "status": "covered",
+      "tests": [
+        "tests/table_parse/table_parse_test.odin::test_definition_state_matrix_has_adjacent_permitted_and_forbidden_transitions"
+      ]
+    },
+    {
+      "id": "Parse_Definition_Form.Dotted_Table",
+      "status": "covered",
+      "tests": [
+        "tests/table_parse/table_parse_test.odin::test_definition_state_matrix_has_adjacent_permitted_and_forbidden_transitions"
+      ]
+    },
+    {
+      "id": "Parse_Definition_Form.Inline_Table",
+      "status": "covered",
+      "tests": [
+        "tests/table_parse/table_parse_test.odin::test_definition_state_matrix_has_adjacent_permitted_and_forbidden_transitions"
+      ]
+    },
+    {
+      "id": "Parse_Definition_Form.Static_Array",
+      "status": "covered",
+      "tests": [
+        "tests/table_parse/table_parse_test.odin::test_definition_state_matrix_has_adjacent_permitted_and_forbidden_transitions"
+      ]
+    },
+    {
+      "id": "Parse_Definition_Form.Array_Of_Tables",
+      "status": "covered",
+      "tests": [
+        "tests/table_parse/table_parse_test.odin::test_definition_state_matrix_has_adjacent_permitted_and_forbidden_transitions"
+      ]
+    },
+    {
+      "id": "Parse_Definition_Form.Array_Of_Tables_Element",
+      "status": "inapplicable",
+      "justification": "This transient provenance labels the newly selected AoT element node. Public definition conflicts are reported against the AoT container or a descendant definition; parser error construction never installs the element marker as existing or attempted.",
+      "tests": []
+    },
+    {
+      "id": "Parse_Definition_Error_Kind.Duplicate_Key",
+      "status": "covered",
+      "tests": [
+        "tests/table_parse/table_parse_test.odin::test_definition_state_matrix_has_adjacent_permitted_and_forbidden_transitions"
+      ]
+    },
+    {
+      "id": "Parse_Definition_Error_Kind.Non_Table_Path_Component",
+      "status": "covered",
+      "tests": [
+        "tests/table_parse/table_parse_test.odin::test_definition_state_matrix_has_adjacent_permitted_and_forbidden_transitions"
+      ]
+    },
+    {
+      "id": "Parse_Definition_Error_Kind.Table_Redefined",
+      "status": "covered",
+      "tests": [
+        "tests/table_parse/table_parse_test.odin::test_definition_state_matrix_has_adjacent_permitted_and_forbidden_transitions"
+      ]
+    },
+    {
+      "id": "Parse_Definition_Error_Kind.Dotted_Table_Redefined",
+      "status": "covered",
+      "tests": [
+        "tests/table_parse/table_parse_test.odin::test_definition_state_matrix_has_adjacent_permitted_and_forbidden_transitions"
+      ]
+    },
+    {
+      "id": "Parse_Definition_Error_Kind.Inline_Table_Extended",
+      "status": "covered",
+      "tests": [
+        "tests/table_parse/table_parse_test.odin::test_definition_state_matrix_has_adjacent_permitted_and_forbidden_transitions"
+      ]
+    },
+    {
+      "id": "Parse_Definition_Error_Kind.Table_Array_Conflict",
+      "status": "covered",
+      "tests": [
+        "tests/table_parse/table_parse_test.odin::test_definition_state_matrix_has_adjacent_permitted_and_forbidden_transitions"
+      ]
+    },
+    {
+      "id": "Parse_Definition_Error_Kind.Array_Of_Tables_Conflict",
+      "status": "covered",
+      "tests": [
+        "tests/table_parse/table_parse_test.odin::test_definition_state_matrix_has_adjacent_permitted_and_forbidden_transitions"
+      ]
+    },
+    {
+      "id": "Parse_Limit_Error.Maximum_Depth_Exceeded",
+      "status": "covered",
+      "tests": [
+        "tests/container_parse/container_parse_test.odin::test_default_and_explicit_maximum_depth_boundaries_and_truncated_paths_are_exact"
+      ]
+    },
+    {
+      "id": "Parse_Limit_Error.Size_Overflow",
+      "status": "inapplicable",
+      "justification": "A public parser fixture must first materialize and UTF-8-preflight the complete input. Reaching parser size arithmetic overflow requires an input/count larger than the supported process can materialize, so no safe finite public-seam fixture exists; the same checked-size category is exercised at clone, mutation, marshal, and unparse public seams.",
+      "tests": []
+    },
+    {
+      "id": "Clone_Configuration_Error.Invalid_Allocator",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_lifecycle/semantic_lifecycle_test.odin::test_nil_allocator_owner_calls_fail_before_allocation"
+      ]
+    },
+    {
+      "id": "Clone_Data_Error_Kind.Invalid_Document",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_clone_missing_data_alternatives_are_structurally_exact"
+      ]
+    },
+    {
+      "id": "Clone_Data_Error_Kind.Invalid_Value_State",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_clone_missing_data_alternatives_are_structurally_exact"
+      ]
+    },
+    {
+      "id": "Clone_Data_Error_Kind.Invalid_Container",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_mutation/semantic_mutation_test.odin::test_clone_boundaries_reject_malformed_ownership_graphs_with_zero_results"
+      ]
+    },
+    {
+      "id": "Clone_Data_Error_Kind.Invalid_Text",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_mutation/semantic_mutation_test.odin::test_clone_boundaries_reject_malformed_ownership_graphs_with_zero_results"
+      ]
+    },
+    {
+      "id": "Clone_Data_Error_Kind.Duplicate_Key",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_clone_missing_data_alternatives_are_structurally_exact"
+      ]
+    },
+    {
+      "id": "Clone_Data_Error_Kind.Invalid_Temporal",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_clone_missing_data_alternatives_are_structurally_exact"
+      ]
+    },
+    {
+      "id": "Clone_Data_Error_Kind.Cycle",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_mutation/semantic_mutation_test.odin::test_clone_boundaries_reject_malformed_ownership_graphs_with_zero_results"
+      ]
+    },
+    {
+      "id": "Clone_Data_Error_Kind.Ownership_Alias",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_mutation/semantic_mutation_test.odin::test_clone_boundaries_reject_malformed_ownership_graphs_with_zero_results"
+      ]
+    },
+    {
+      "id": "Clone_Data_Error_Kind.Allocator_Mismatch",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_mutation/semantic_mutation_test.odin::test_clone_boundaries_reject_malformed_ownership_graphs_with_zero_results"
+      ]
+    },
+    {
+      "id": "Clone_Limit_Error.Maximum_Depth_Exceeded",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_mutation/semantic_mutation_test.odin::test_local_depth_256_succeeds_257_fails_and_root_clone_rechecks_depth"
+      ]
+    },
+    {
+      "id": "Clone_Limit_Error.Size_Overflow",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_mutation/semantic_mutation_test.odin::test_set_reports_size_overflow_before_touching_malformed_storage"
+      ]
+    },
+    {
+      "id": "Mutation_Data_Error_Kind.Invalid_Table",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_mutation/semantic_mutation_test.odin::test_set_validates_existing_target_before_destructive_mutation"
+      ]
+    },
+    {
+      "id": "Mutation_Data_Error_Kind.Invalid_Value_State",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_mutation/semantic_mutation_test.odin::test_set_reports_exact_text_temporal_container_and_union_errors"
+      ]
+    },
+    {
+      "id": "Mutation_Data_Error_Kind.Invalid_Key_Text",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_mutation/semantic_mutation_test.odin::test_set_reports_exact_text_temporal_container_and_union_errors"
+      ]
+    },
+    {
+      "id": "Mutation_Data_Error_Kind.Invalid_Value_Text",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_mutation/semantic_mutation_test.odin::test_set_reports_exact_text_temporal_container_and_union_errors"
+      ]
+    },
+    {
+      "id": "Mutation_Data_Error_Kind.Duplicate_Key",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_mutation/semantic_mutation_test.odin::test_set_rejects_duplicate_cycle_alias_and_allocator_mismatch_graphs"
+      ]
+    },
+    {
+      "id": "Mutation_Data_Error_Kind.Invalid_Temporal",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_mutation/semantic_mutation_test.odin::test_set_reports_exact_text_temporal_container_and_union_errors"
+      ]
+    },
+    {
+      "id": "Mutation_Data_Error_Kind.Cycle",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_mutation/semantic_mutation_test.odin::test_set_rejects_duplicate_cycle_alias_and_allocator_mismatch_graphs"
+      ]
+    },
+    {
+      "id": "Mutation_Data_Error_Kind.Ownership_Alias",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_mutation/semantic_mutation_test.odin::test_set_rejects_duplicate_cycle_alias_and_allocator_mismatch_graphs"
+      ]
+    },
+    {
+      "id": "Mutation_Data_Error_Kind.Allocator_Mismatch",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_mutation/semantic_mutation_test.odin::test_set_rejects_duplicate_cycle_alias_and_allocator_mismatch_graphs"
+      ]
+    },
+    {
+      "id": "Mutation_Limit_Error.Maximum_Depth_Exceeded",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_mutation/semantic_mutation_test.odin::test_local_depth_256_succeeds_257_fails_and_root_clone_rechecks_depth"
+      ]
+    },
+    {
+      "id": "Mutation_Limit_Error.Size_Overflow",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_mutation/semantic_mutation_test.odin::test_set_reports_size_overflow_before_touching_malformed_storage"
+      ]
+    },
+    {
+      "id": "Unparse_Configuration_Error.Invalid_Allocator",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_configuration_precedence_and_zero_document_errors_return_empty_output"
+      ]
+    },
+    {
+      "id": "Unparse_Configuration_Error.Nil_Options",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_to_writer_configuration_and_preflight_failures_make_zero_writer_calls"
+      ]
+    },
+    {
+      "id": "Unparse_Configuration_Error.Invalid_Max_Depth",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_configuration_precedence_and_zero_document_errors_return_empty_output"
+      ]
+    },
+    {
+      "id": "Unparse_Data_Error_Kind.Invalid_Document",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_configuration_precedence_and_zero_document_errors_return_empty_output"
+      ]
+    },
+    {
+      "id": "Unparse_Data_Error_Kind.Invalid_Value_State",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_reports_invalid_union_text_duplicate_and_temporal_at_canonical_paths"
+      ]
+    },
+    {
+      "id": "Unparse_Data_Error_Kind.Invalid_Container",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_preflight_rejects_container_cycle_alias_and_allocator_mismatch"
+      ]
+    },
+    {
+      "id": "Unparse_Data_Error_Kind.Invalid_Text",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_reports_invalid_union_text_duplicate_and_temporal_at_canonical_paths"
+      ]
+    },
+    {
+      "id": "Unparse_Data_Error_Kind.Duplicate_Key",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_reports_invalid_union_text_duplicate_and_temporal_at_canonical_paths"
+      ]
+    },
+    {
+      "id": "Unparse_Data_Error_Kind.Invalid_Temporal",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_reports_invalid_union_text_duplicate_and_temporal_at_canonical_paths"
+      ]
+    },
+    {
+      "id": "Unparse_Data_Error_Kind.Cycle",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_preflight_rejects_container_cycle_alias_and_allocator_mismatch"
+      ]
+    },
+    {
+      "id": "Unparse_Data_Error_Kind.Ownership_Alias",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_preflight_rejects_container_cycle_alias_and_allocator_mismatch"
+      ]
+    },
+    {
+      "id": "Unparse_Data_Error_Kind.Allocator_Mismatch",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_preflight_rejects_container_cycle_alias_and_allocator_mismatch"
+      ]
+    },
+    {
+      "id": "Unparse_Limit_Error.Maximum_Depth_Exceeded",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_default_and_hard_depth_boundaries_are_exact"
+      ]
+    },
+    {
+      "id": "Unparse_Limit_Error.Size_Overflow",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_rejects_checked_container_size_overflow_before_output_allocation"
+      ]
+    },
+    {
+      "id": "Marshal_Configuration_Error.Invalid_Allocator",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/typed_marshal_test.odin::test_marshal_configuration_precedence_makes_no_writer_calls"
+      ]
+    },
+    {
+      "id": "Marshal_Configuration_Error.Nil_Options",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/typed_marshal_test.odin::test_marshal_configuration_precedence_makes_no_writer_calls"
+      ]
+    },
+    {
+      "id": "Marshal_Configuration_Error.Invalid_Max_Depth",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/typed_marshal_test.odin::test_marshal_configuration_precedence_makes_no_writer_calls"
+      ]
+    },
+    {
+      "id": "Marshal_Configuration_Error.Invalid_Codec_Registry",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/custom_codec_test.odin::test_marshal_codec_configuration_and_callback_failures_are_distinct"
+      ]
+    },
+    {
+      "id": "Marshal_Data_Error_Kind.Invalid_Root_Shape",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/typed_marshal_test.odin::test_marshal_rejects_non_struct_roots"
+      ]
+    },
+    {
+      "id": "Marshal_Data_Error_Kind.Unsupported_Type",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/typed_marshal_test.odin::test_marshal_wrappers_recursively_unwrap_and_nil_states_fail_explicitly"
+      ]
+    },
+    {
+      "id": "Marshal_Data_Error_Kind.Unsupported_Nil",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/typed_marshal_test.odin::test_marshal_wrappers_recursively_unwrap_and_nil_states_fail_explicitly"
+      ]
+    },
+    {
+      "id": "Marshal_Data_Error_Kind.Invalid_Value_State",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_marshal_codec_invalid_value_state_payload_is_exact"
+      ]
+    },
+    {
+      "id": "Marshal_Data_Error_Kind.Invalid_Container",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/custom_codec_test.odin::test_marshal_codec_values_use_semantic_validation_and_cleanup"
+      ]
+    },
+    {
+      "id": "Marshal_Data_Error_Kind.Invalid_Text",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/custom_codec_test.odin::test_marshal_codec_values_use_semantic_validation_and_cleanup"
+      ]
+    },
+    {
+      "id": "Marshal_Data_Error_Kind.Duplicate_Key",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/custom_codec_test.odin::test_marshal_codec_values_use_semantic_validation_and_cleanup"
+      ]
+    },
+    {
+      "id": "Marshal_Data_Error_Kind.Invalid_Temporal",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/custom_codec_test.odin::test_marshal_codec_values_use_semantic_validation_and_cleanup"
+      ]
+    },
+    {
+      "id": "Marshal_Data_Error_Kind.Integer_Out_Of_Range",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_marshal_deep_path_preserves_exact_first_and_last_segments"
+      ]
+    },
+    {
+      "id": "Marshal_Data_Error_Kind.Float_Out_Of_Range",
+      "status": "inapplicable",
+      "justification": "The supported reflected float sources are f16, f32, and f64. Every finite value widens into f64, while infinities and NaNs are valid TOML float values, so no supported source value can reach this alternative.",
+      "tests": []
+    },
+    {
+      "id": "Marshal_Data_Error_Kind.Malformed_Tag",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/typed_marshal_test.odin::test_marshal_validates_complete_tags_and_collisions_before_field_values"
+      ]
+    },
+    {
+      "id": "Marshal_Data_Error_Kind.Effective_Field_Name_Collision",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/typed_marshal_test.odin::test_marshal_validates_complete_tags_and_collisions_before_field_values"
+      ]
+    },
+    {
+      "id": "Marshal_Data_Error_Kind.Unsupported_Map_Key_Type",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/typed_marshal_test.odin::test_marshal_map_diagnostics_are_sorted_and_cycles_track_only_active_references"
+      ]
+    },
+    {
+      "id": "Marshal_Data_Error_Kind.Converted_Map_Key_Collision",
+      "status": "inapplicable",
+      "justification": "The only supported map keys are string and named/distinct string. Conversion to base string preserves exact bytes and is injective within one Odin map, and map-key codecs are forbidden, so two distinct accepted keys cannot collide.",
+      "tests": []
+    },
+    {
+      "id": "Marshal_Data_Error_Kind.Active_Recursion_Cycle",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/typed_marshal_test.odin::test_marshal_reports_container_value_paths_and_active_cycles"
+      ]
+    },
+    {
+      "id": "Marshal_Data_Error_Kind.Codec_Value_Cycle",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/custom_codec_test.odin::test_marshal_codec_values_use_semantic_validation_and_cleanup"
+      ]
+    },
+    {
+      "id": "Marshal_Data_Error_Kind.Codec_Value_Ownership_Alias",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/custom_codec_test.odin::test_marshal_codec_values_use_semantic_validation_and_cleanup"
+      ]
+    },
+    {
+      "id": "Marshal_Data_Error_Kind.Codec_Value_Allocator_Mismatch",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/custom_codec_test.odin::test_marshal_codec_values_use_semantic_validation_and_cleanup"
+      ]
+    },
+    {
+      "id": "Marshal_Limit_Error.Maximum_Depth_Exceeded",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/typed_marshal_test.odin::test_marshal_checks_scalar_boundaries_and_reports_value_paths"
+      ]
+    },
+    {
+      "id": "Marshal_Limit_Error.Size_Overflow",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_marshal_size_overflow_is_structural_and_precedes_storage_access"
+      ]
+    },
+    {
+      "id": "Unmarshal_Configuration_Error.Invalid_Allocator",
+      "status": "covered",
+      "tests": [
+        "tests/typed_unmarshal/typed_unmarshal_test.odin::unmarshal_configuration_precedes_parsing"
+      ]
+    },
+    {
+      "id": "Unmarshal_Configuration_Error.Invalid_Max_Depth",
+      "status": "covered",
+      "tests": [
+        "tests/typed_unmarshal/typed_unmarshal_test.odin::unmarshal_configuration_precedes_parsing"
+      ]
+    },
+    {
+      "id": "Unmarshal_Configuration_Error.Nil_Destination",
+      "status": "covered",
+      "tests": [
+        "tests/typed_unmarshal/typed_unmarshal_test.odin::unmarshal_configuration_precedes_parsing"
+      ]
+    },
+    {
+      "id": "Unmarshal_Configuration_Error.Invalid_Codec_Registry",
+      "status": "covered",
+      "tests": [
+        "tests/typed_unmarshal/typed_unmarshal_test.odin::unmarshal_configuration_precedes_parsing"
+      ]
+    },
+    {
+      "id": "Unmarshal_Data_Error_Kind.Invalid_Root_Shape",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_unmarshal_root_type_tag_field_unknown_and_ownership_payloads_are_exact"
+      ]
+    },
+    {
+      "id": "Unmarshal_Data_Error_Kind.Unsupported_Destination_Type",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_unmarshal_root_type_tag_field_unknown_and_ownership_payloads_are_exact"
+      ]
+    },
+    {
+      "id": "Unmarshal_Data_Error_Kind.Source_Destination_Kind_Mismatch",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_unmarshal_payload_types_kinds_counts_ranges_and_input_lifetime_are_exact"
+      ]
+    },
+    {
+      "id": "Unmarshal_Data_Error_Kind.Integer_Out_Of_Range",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_unmarshal_payload_types_kinds_counts_ranges_and_input_lifetime_are_exact"
+      ]
+    },
+    {
+      "id": "Unmarshal_Data_Error_Kind.Float_Out_Of_Range",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_unmarshal_payload_types_kinds_counts_ranges_and_input_lifetime_are_exact"
+      ]
+    },
+    {
+      "id": "Unmarshal_Data_Error_Kind.Fixed_Array_Length_Mismatch",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_unmarshal_payload_types_kinds_counts_ranges_and_input_lifetime_are_exact"
+      ]
+    },
+    {
+      "id": "Unmarshal_Data_Error_Kind.Malformed_Tag",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_unmarshal_root_type_tag_field_unknown_and_ownership_payloads_are_exact"
+      ]
+    },
+    {
+      "id": "Unmarshal_Data_Error_Kind.Effective_Field_Name_Collision",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_unmarshal_root_type_tag_field_unknown_and_ownership_payloads_are_exact"
+      ]
+    },
+    {
+      "id": "Unmarshal_Data_Error_Kind.Unknown_Field",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_unmarshal_root_type_tag_field_unknown_and_ownership_payloads_are_exact"
+      ]
+    },
+    {
+      "id": "Unmarshal_Data_Error_Kind.Nonzero_Destination_Ownership",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_unmarshal_root_type_tag_field_unknown_and_ownership_payloads_are_exact"
+      ]
+    },
+    {
+      "id": "Unmarshal_Data_Error_Kind.Destination_Size_Overflow",
+      "status": "inapplicable",
+      "justification": "Valid Reference Odin RTTI already has representable type sizes, and a parsed array/map count large enough to overflow destination size arithmetic cannot be materialized as complete public TOML input on a supported process. Unmarshal has no semantic-Document overload or approved private size seam.",
+      "tests": []
+    },
+    {
+      "id": "Unmarshal_Data_Error_Kind.Maximum_Depth_Exceeded",
+      "status": "inapplicable",
+      "justification": "Unmarshal passes the same max_depth to strict parsing before typed preflight. Any semantic source path beyond the limit therefore returns wrapped Parse_Limit_Error.Maximum_Depth_Exceeded first; destination wrappers do not add semantic path depth.",
+      "tests": []
+    },
+    {
+      "id": "Codec_Registry_Data_Error.Invalid_Allocator",
+      "status": "covered",
+      "tests": [
+        "tests/codec_registry/codec_registry_test.odin::test_init_rejects_a_nil_allocator"
+      ]
+    },
+    {
+      "id": "Codec_Registry_Data_Error.Invalid_Registry",
+      "status": "covered",
+      "tests": [
+        "tests/codec_registry/codec_registry_test.odin::test_registration_rejects_invalid_registry_typeid_and_callback"
+      ]
+    },
+    {
+      "id": "Codec_Registry_Data_Error.Invalid_Type_ID",
+      "status": "covered",
+      "tests": [
+        "tests/codec_registry/codec_registry_test.odin::test_registration_rejects_invalid_registry_typeid_and_callback"
+      ]
+    },
+    {
+      "id": "Codec_Registry_Data_Error.Nil_Callback",
+      "status": "covered",
+      "tests": [
+        "tests/codec_registry/codec_registry_test.odin::test_registration_rejects_invalid_registry_typeid_and_callback"
+      ]
+    },
+    {
+      "id": "Codec_Registry_Data_Error.Duplicate_Codec",
+      "status": "covered",
+      "tests": [
+        "tests/codec_registry/codec_registry_test.odin::test_directional_registration_stores_exact_callbacks_and_user_data"
+      ]
+    },
+    {
+      "id": "Parse_Diagnostic_Detail.Parse_Encoding_Error",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_whole_input_utf8_preflight_and_coordinates_are_exact"
+      ]
+    },
+    {
+      "id": "Parse_Diagnostic_Detail.Parse_Lexical_Error",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_lexical_and_grammar_diagnostics_remain_distinct"
+      ]
+    },
+    {
+      "id": "Parse_Diagnostic_Detail.Parse_Grammar_Error",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_parse_grammar_syntax_matrix_is_structurally_exact"
+      ]
+    },
+    {
+      "id": "Parse_Diagnostic_Detail.Parse_Value_Error",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_scalar_candidate_classification_and_boundaries_are_frozen"
+      ]
+    },
+    {
+      "id": "Parse_Diagnostic_Detail.Parse_Definition_Error",
+      "status": "covered",
+      "tests": [
+        "tests/table_parse/table_parse_test.odin::test_definition_state_matrix_has_adjacent_permitted_and_forbidden_transitions"
+      ]
+    },
+    {
+      "id": "Parse_Diagnostic_Detail.Parse_Limit_Error",
+      "status": "covered",
+      "tests": [
+        "tests/container_parse/container_parse_test.odin::test_default_and_explicit_maximum_depth_boundaries_and_truncated_paths_are_exact"
+      ]
+    },
+    {
+      "id": "Parse_Error.Parse_Configuration_Error",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_configuration_precedence_is_nil_allocator_then_options_then_utf8"
+      ]
+    },
+    {
+      "id": "Parse_Error.Parse_Diagnostic",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_parse_grammar_syntax_matrix_is_structurally_exact"
+      ]
+    },
+    {
+      "id": "Parse_Error.runtime.Allocator_Error",
+      "status": "covered",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_parse_allocation_failure_is_transactional_at_every_ordinal"
+      ]
+    },
+    {
+      "id": "Clone_Diagnostic_Detail.Clone_Data_Error_Kind",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_clone_missing_data_alternatives_are_structurally_exact"
+      ]
+    },
+    {
+      "id": "Clone_Diagnostic_Detail.Clone_Limit_Error",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_mutation/semantic_mutation_test.odin::test_set_reports_size_overflow_before_touching_malformed_storage"
+      ]
+    },
+    {
+      "id": "Clone_Error.Clone_Configuration_Error",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_lifecycle/semantic_lifecycle_test.odin::test_nil_allocator_owner_calls_fail_before_allocation"
+      ]
+    },
+    {
+      "id": "Clone_Error.Clone_Diagnostic",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_clone_missing_data_alternatives_are_structurally_exact"
+      ]
+    },
+    {
+      "id": "Clone_Error.runtime.Allocator_Error",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_lifecycle/semantic_lifecycle_test.odin::test_clone_failure_is_transactional_at_every_allocation_ordinal"
+      ]
+    },
+    {
+      "id": "Mutation_Diagnostic_Detail.Mutation_Data_Error_Kind",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_mutation/semantic_mutation_test.odin::test_set_reports_exact_text_temporal_container_and_union_errors"
+      ]
+    },
+    {
+      "id": "Mutation_Diagnostic_Detail.Mutation_Limit_Error",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_mutation/semantic_mutation_test.odin::test_set_reports_size_overflow_before_touching_malformed_storage"
+      ]
+    },
+    {
+      "id": "Mutation_Error.Mutation_Diagnostic",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_mutation/semantic_mutation_test.odin::test_set_reports_exact_text_temporal_container_and_union_errors"
+      ]
+    },
+    {
+      "id": "Mutation_Error.runtime.Allocator_Error",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_mutation/semantic_mutation_test.odin::test_set_insertion_allocation_failures_are_physically_transactional"
+      ]
+    },
+    {
+      "id": "Unparse_Diagnostic_Detail.Unparse_Data_Error_Kind",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_reports_invalid_union_text_duplicate_and_temporal_at_canonical_paths"
+      ]
+    },
+    {
+      "id": "Unparse_Diagnostic_Detail.Unparse_Limit_Error",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_rejects_checked_container_size_overflow_before_output_allocation"
+      ]
+    },
+    {
+      "id": "Unparse_Error.Unparse_Configuration_Error",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_configuration_precedence_and_zero_document_errors_return_empty_output"
+      ]
+    },
+    {
+      "id": "Unparse_Error.Unparse_Diagnostic",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_reports_invalid_union_text_duplicate_and_temporal_at_canonical_paths"
+      ]
+    },
+    {
+      "id": "Unparse_Error.runtime.Allocator_Error",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_allocates_only_exact_result_and_cleans_every_failed_ordinal"
+      ]
+    },
+    {
+      "id": "Unparse_Error.io.Error",
+      "status": "covered",
+      "tests": [
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_to_writer_consumes_each_result_once_with_frozen_error_precedence"
+      ]
+    },
+    {
+      "id": "Marshal_Diagnostic_Detail.Marshal_Data_Error",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_marshal_deep_path_preserves_exact_first_and_last_segments"
+      ]
+    },
+    {
+      "id": "Marshal_Diagnostic_Detail.Marshal_Limit_Error",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_marshal_size_overflow_is_structural_and_precedes_storage_access"
+      ]
+    },
+    {
+      "id": "Marshal_Diagnostic_Detail.Marshal_Codec_Error",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/custom_codec_test.odin::test_marshal_codec_configuration_and_callback_failures_are_distinct"
+      ]
+    },
+    {
+      "id": "Marshal_Error.Marshal_Configuration_Error",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_configuration_registry_allocator_writer_and_nil_success_precedence_is_exact"
+      ]
+    },
+    {
+      "id": "Marshal_Error.Marshal_Diagnostic",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_marshal_deep_path_preserves_exact_first_and_last_segments"
+      ]
+    },
+    {
+      "id": "Marshal_Error.runtime.Allocator_Error",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/typed_marshal_test.odin::test_marshal_cleans_every_failed_allocation_ordinal"
+      ]
+    },
+    {
+      "id": "Marshal_Error.io.Error",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/typed_marshal_test.odin::test_marshal_writer_preserves_common_fault_contract_and_cleanup"
+      ]
+    },
+    {
+      "id": "Unmarshal_Diagnostic_Detail.Unmarshal_Data_Error",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_unmarshal_payload_types_kinds_counts_ranges_and_input_lifetime_are_exact"
+      ]
+    },
+    {
+      "id": "Unmarshal_Diagnostic_Detail.Unmarshal_Codec_Error",
+      "status": "covered",
+      "tests": [
+        "tests/typed_unmarshal/custom_codec_test.odin::unmarshal_codec_failure_zeros_the_complete_slot_and_freezes_diagnostics"
+      ]
+    },
+    {
+      "id": "Unmarshal_Error.Unmarshal_Configuration_Error",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_configuration_registry_allocator_writer_and_nil_success_precedence_is_exact"
+      ]
+    },
+    {
+      "id": "Unmarshal_Error.Unmarshal_Parse_Error",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_unmarshal_wraps_deep_parse_path_with_exact_first_and_last_segments"
+      ]
+    },
+    {
+      "id": "Unmarshal_Error.Unmarshal_Diagnostic",
+      "status": "covered",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_unmarshal_payload_types_kinds_counts_ranges_and_input_lifetime_are_exact"
+      ]
+    },
+    {
+      "id": "Unmarshal_Error.runtime.Allocator_Error",
+      "status": "covered",
+      "tests": [
+        "tests/typed_unmarshal/typed_unmarshal_test.odin::unmarshal_allocator_failures_leave_destination_and_package_ownership_clean"
+      ]
+    },
+    {
+      "id": "Codec_Registry_Error.Codec_Registry_Data_Error",
+      "status": "covered",
+      "tests": [
+        "tests/codec_registry/codec_registry_test.odin::test_registration_rejects_invalid_registry_typeid_and_callback"
+      ]
+    },
+    {
+      "id": "Codec_Registry_Error.runtime.Allocator_Error",
+      "status": "covered",
+      "tests": [
+        "tests/codec_registry/codec_registry_test.odin::test_growth_propagates_the_allocator_error_exactly"
+      ]
+    },
+    {
+      "id": "Codec_Callback_Error.Codec_Callback_Failure",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/custom_codec_test.odin::test_marshal_codec_configuration_and_callback_failures_are_distinct",
+        "tests/typed_unmarshal/custom_codec_test.odin::unmarshal_codec_failure_zeros_the_complete_slot_and_freezes_diagnostics"
+      ]
+    },
+    {
+      "id": "Codec_Callback_Error.runtime.Allocator_Error",
+      "status": "covered",
+      "tests": [
+        "tests/typed_marshal/custom_codec_test.odin::test_marshal_codec_configuration_and_callback_failures_are_distinct",
+        "tests/typed_unmarshal/custom_codec_test.odin::unmarshal_codec_allocator_errors_remain_exact_and_the_slot_is_zero"
+      ]
+    },
+    {
+      "id": "temporal.Error.None",
+      "status": "covered",
+      "tests": [
+        "tests/temporal/temporal_test.odin::test_validate_local_date_boundaries_and_gregorian_neighbors"
+      ]
+    },
+    {
+      "id": "temporal.Error.Invalid_Year",
+      "status": "covered",
+      "tests": [
+        "tests/temporal/temporal_test.odin::test_validate_local_date_boundaries_and_gregorian_neighbors"
+      ]
+    },
+    {
+      "id": "temporal.Error.Invalid_Month",
+      "status": "covered",
+      "tests": [
+        "tests/temporal/temporal_test.odin::test_validate_local_date_boundaries_and_gregorian_neighbors",
+        "tests/scalar_parse/scalar_parse_test.odin::test_scalar_candidate_classification_and_boundaries_are_frozen"
+      ]
+    },
+    {
+      "id": "temporal.Error.Invalid_Day",
+      "status": "covered",
+      "tests": [
+        "tests/temporal/temporal_test.odin::test_validate_local_date_boundaries_and_gregorian_neighbors",
+        "tests/scalar_parse/scalar_parse_test.odin::test_scalar_candidate_classification_and_boundaries_are_frozen"
+      ]
+    },
+    {
+      "id": "temporal.Error.Invalid_Hour",
+      "status": "covered",
+      "tests": [
+        "tests/temporal/temporal_test.odin::test_validate_local_time_boundaries",
+        "tests/scalar_parse/scalar_parse_test.odin::test_scalar_candidate_classification_and_boundaries_are_frozen"
+      ]
+    },
+    {
+      "id": "temporal.Error.Invalid_Minute",
+      "status": "covered",
+      "tests": [
+        "tests/temporal/temporal_test.odin::test_validate_local_time_boundaries",
+        "tests/scalar_parse/scalar_parse_test.odin::test_scalar_candidate_classification_and_boundaries_are_frozen"
+      ]
+    },
+    {
+      "id": "temporal.Error.Invalid_Second",
+      "status": "covered",
+      "tests": [
+        "tests/temporal/temporal_test.odin::test_validate_local_time_boundaries",
+        "tests/scalar_parse/scalar_parse_test.odin::test_scalar_candidate_classification_and_boundaries_are_frozen"
+      ]
+    },
+    {
+      "id": "temporal.Error.Invalid_Nanosecond",
+      "status": "covered",
+      "tests": [
+        "tests/temporal/temporal_test.odin::test_validate_local_time_boundaries"
+      ]
+    },
+    {
+      "id": "temporal.Error.Invalid_Offset_Kind",
+      "status": "covered",
+      "tests": [
+        "tests/temporal/temporal_test.odin::test_validate_offsets_and_composite_precedence"
+      ]
+    },
+    {
+      "id": "temporal.Error.Invalid_Offset_Minutes",
+      "status": "covered",
+      "tests": [
+        "tests/temporal/temporal_test.odin::test_validate_offsets_and_composite_precedence",
+        "tests/scalar_parse/scalar_parse_test.odin::test_scalar_candidate_classification_and_boundaries_are_frozen"
+      ]
+    },
+    {
+      "id": "temporal.Error.Invalid_Unknown_Offset",
+      "status": "covered",
+      "tests": [
+        "tests/temporal/temporal_test.odin::test_validate_offsets_and_composite_precedence"
+      ]
+    },
+    {
+      "id": "temporal.Error.Unsupported_Leap_Second",
+      "status": "covered",
+      "tests": [
+        "tests/temporal/temporal_test.odin::test_convert_local_values_without_loss"
+      ]
+    },
+    {
+      "id": "temporal.Error.Out_Of_Range",
+      "status": "covered",
+      "tests": [
+        "tests/temporal/temporal_test.odin::test_convert_offset_date_times_and_explicit_offsets"
+      ]
+    },
+    {
+      "id": "temporal.Error.Timezone_Not_Local",
+      "status": "covered",
+      "tests": [
+        "tests/temporal/temporal_test.odin::test_convert_local_values_without_loss"
+      ]
+    },
+    {
+      "id": "temporal.Error.Leap_Second_Not_Comparable",
+      "status": "covered",
+      "tests": [
+        "tests/temporal/temporal_test.odin::test_compare_instants_with_offsets_unknown_state_and_leap_seconds"
+      ]
+    }
+  ],
+  "contracts": [
+    {
+      "id": "coordinates-and-ranges",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_ordinary_diagnostic_coordinates_count_unicode_scalars_tabs_and_crlf",
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_unmarshal_unicode_escape_tab_crlf_range_and_tag_path_outlive_input",
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_parse_bare_cr_coordinate_is_exact_after_unicode_and_tab"
+      ]
+    },
+    {
+      "id": "parse-input-lifetime",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_parse_snapshots_outlive_input_with_exact_utf8_safe_long_key"
+      ]
+    },
+    {
+      "id": "parse-key-truncation",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_parse_snapshots_outlive_input_with_exact_utf8_safe_long_key"
+      ]
+    },
+    {
+      "id": "path-truncation",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_parse_deep_key_path_preserves_exact_first_and_last_snapshots",
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_marshal_deep_path_preserves_exact_first_and_last_segments",
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_unmarshal_wraps_deep_parse_path_with_exact_first_and_last_segments"
+      ]
+    },
+    {
+      "id": "encode-path-borrow-lifetime",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_encode_paths_borrow_stable_application_and_document_keys"
+      ]
+    },
+    {
+      "id": "configuration-precedence",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_configuration_registry_allocator_writer_and_nil_success_precedence_is_exact",
+        "tests/codec_registry/codec_registry_test.odin::test_registration_rejects_invalid_registry_typeid_and_callback"
+      ]
+    },
+    {
+      "id": "source-traversal-precedence",
+      "tests": [
+        "tests/table_parse/table_parse_test.odin::test_definition_state_matrix_has_adjacent_permitted_and_forbidden_transitions",
+        "tests/typed_marshal/typed_marshal_test.odin::test_marshal_map_diagnostics_are_sorted_and_cycles_track_only_active_references",
+        "tests/typed_unmarshal/typed_unmarshal_test.odin::unmarshal_rejects_first_recursive_unknown_without_mutation"
+      ]
+    },
+    {
+      "id": "allocator-errors",
+      "tests": [
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_to_writer_cleans_every_preflight_allocation_failure_before_output",
+        "tests/typed_unmarshal/custom_codec_test.odin::unmarshal_codec_allocator_errors_remain_exact_and_the_slot_is_zero"
+      ]
+    },
+    {
+      "id": "writer-errors",
+      "tests": [
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_to_writer_consumes_each_result_once_with_frozen_error_precedence",
+        "tests/typed_marshal/typed_marshal_test.odin::test_marshal_writer_preserves_common_fault_contract_and_cleanup"
+      ]
+    },
+    {
+      "id": "codec-errors",
+      "tests": [
+        "tests/typed_marshal/custom_codec_test.odin::test_marshal_codec_configuration_and_callback_failures_are_distinct",
+        "tests/typed_unmarshal/custom_codec_test.odin::unmarshal_codec_failure_zeros_the_complete_slot_and_freezes_diagnostics"
+      ]
+    },
+    {
+      "id": "nil-success",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_configuration_registry_allocator_writer_and_nil_success_precedence_is_exact",
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_empty_document_returns_nil_backed_output"
+      ]
+    },
+    {
+      "id": "options",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_configuration_registry_allocator_writer_and_nil_success_precedence_is_exact",
+        "tests/typed_unmarshal/typed_unmarshal_test.odin::unmarshal_rejects_first_recursive_unknown_without_mutation"
+      ]
+    },
+    {
+      "id": "required-results",
+      "evidence": "scripts/check_public_api.py statically requires @(require_results) on every frozen fallible/owned/boolean public procedure and rejects declaration drift."
+    },
+    {
+      "id": "payload-fields",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_unmarshal_payload_types_kinds_counts_ranges_and_input_lifetime_are_exact",
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_clone_missing_data_alternatives_are_structurally_exact",
+        "tests/typed_marshal/typed_marshal_test.odin::test_marshal_checks_scalar_boundaries_and_reports_value_paths"
+      ]
+    },
+    {
+      "id": "source-value-kinds",
+      "tests": [
+        "tests/diagnostic_acceptance/diagnostic_acceptance_test.odin::test_unmarshal_kind_mismatch_reports_every_source_value_kind_exactly"
+      ]
+    },
+    {
+      "id": "definition-pairs-and-related-ranges",
+      "tests": [
+        "tests/table_parse/table_parse_test.odin::test_definition_state_matrix_has_adjacent_permitted_and_forbidden_transitions",
+        "tests/table_parse/table_parse_test.odin::test_aot_conflicts_report_current_component_and_latest_element_header_ranges"
+      ]
+    },
+    {
+      "id": "external-error-values",
+      "tests": [
+        "tests/allocator_gate/allocator_gate_test.odin::test_unsupported_allocation_and_resize_errors_remain_exact",
+        "tests/semantic_unparse/semantic_unparse_test.odin::test_unparse_to_writer_consumes_each_result_once_with_frozen_error_precedence",
+        "tests/typed_marshal/custom_codec_test.odin::test_marshal_codec_configuration_and_callback_failures_are_distinct",
+        "tests/typed_unmarshal/custom_codec_test.odin::unmarshal_direct_map_callback_failure_removes_the_uncommitted_entry"
+      ]
+    },
+    {
+      "id": "wrapped-temporal-errors",
+      "tests": [
+        "tests/scalar_parse/scalar_parse_test.odin::test_scalar_candidate_classification_and_boundaries_are_frozen"
+      ],
+      "evidence": "The parser-reachable temporal sub-errors are Invalid_Month, Invalid_Day, Invalid_Hour, Invalid_Minute, Invalid_Second, and Invalid_Offset_Minutes; the public scalar matrix asserts each exact wrapped temporal.Error and zeroes it for every non-temporal Parse_Value_Error."
+    }
+  ]
+}

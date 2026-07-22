@@ -341,12 +341,37 @@ unmarshal_codec_failure_zeros_the_complete_slot_and_freezes_diagnostics :: proc(
 			testing.expect_value(t, diagnostic.source.value.start.byte, 26)
 			testing.expect_value(t, diagnostic.source.value.end.byte, 27)
 		}
+		testing.expect_value(t, diagnostic.path.segment_count, u8(1))
+		testing.expect_value(t, diagnostic.path.prefix_count, u8(1))
+		testing.expect_value(t, diagnostic.path.total_segment_count, u16(1))
+		testing.expect_value(t, diagnostic.path.omitted_segment_count, u16(0))
+		testing.expect(t, !diagnostic.path.truncated)
 		name, path_ok := diagnostic.path.segments[0].(string)
 		testing.expect(t, path_ok)
 		if path_ok {testing.expect_value(t, name, "failing")}
 	}
 	assert(delete(destination.first) == nil)
 	destination.first = ""
+
+	root_destination: Codec_Failing_Slot
+	root_error := toml.unmarshal_string(
+		"value = 1\n", &root_destination, {codecs = &registry},
+	)
+	root_diagnostic, root_ok := root_error.(toml.Unmarshal_Diagnostic)
+	testing.expect(t, root_ok)
+	if root_ok {
+		codec_error, codec_ok := root_diagnostic.detail.(toml.Unmarshal_Codec_Error)
+		testing.expect(t, codec_ok)
+		if codec_ok {
+			testing.expect_value(t, codec_error, toml.Unmarshal_Codec_Error{
+				registered_type = typeid_of(Codec_Failing_Slot),
+				code = 0x1020_3040,
+			})
+		}
+		testing.expect_value(t, root_diagnostic.source, toml.Optional_Source_Range{})
+		testing.expect_value(t, root_diagnostic.path, toml.Encode_Diagnostic_Path{})
+	}
+	testing.expect_value(t, root_destination, Codec_Failing_Slot{})
 }
 
 @(test)
@@ -481,8 +506,26 @@ unmarshal_direct_map_callback_failure_removes_the_uncommitted_entry :: proc(t: ^
 	) == nil)
 	destination: map[string]Codec_Failing_Slot
 	err := toml.unmarshal_string("entry = 1\nlater = 2\n", &destination, {codecs = &registry})
-	_, diagnostic_ok := err.(toml.Unmarshal_Diagnostic)
+	diagnostic, diagnostic_ok := err.(toml.Unmarshal_Diagnostic)
 	testing.expect(t, diagnostic_ok)
+	if diagnostic_ok {
+		codec_error, codec_ok := diagnostic.detail.(toml.Unmarshal_Codec_Error)
+		testing.expect(t, codec_ok)
+		if codec_ok {
+			testing.expect_value(t, codec_error, toml.Unmarshal_Codec_Error{
+				registered_type = typeid_of(Codec_Failing_Slot),
+				code = 17,
+			})
+		}
+		testing.expect(t, diagnostic.source.ok)
+		if diagnostic.source.ok {
+			testing.expect_value(t, diagnostic.source.value, toml.Source_Range{
+				start = {byte = 8, line = 1, column = 9},
+				end = {byte = 9, line = 1, column = 10},
+			})
+		}
+		testing.expect_value(t, diagnostic.path, toml.Encode_Diagnostic_Path{})
+	}
 	testing.expect_value(t, state.call_count, 1)
 	testing.expect_value(t, len(destination), 0)
 	if destination.allocator.procedure != nil {assert(delete(destination) == nil)}

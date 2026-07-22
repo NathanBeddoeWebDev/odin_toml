@@ -781,6 +781,28 @@ marshal_data_kind :: proc(t: ^testing.T, err: toml.Marshal_Error) -> toml.Marsha
 	if !data_ok {
 		return {}
 	}
+	if data.kind != .Invalid_Temporal {
+		testing.expect_value(t, data.temporal_error, temporal.Error.None)
+	}
+	if data.kind != .Effective_Field_Name_Collision {
+		testing.expect(t, data.related_type == nil)
+	}
+	testing.expect_value(t, data.expected_count, 0)
+	testing.expect_value(t, data.actual_count, 0)
+	if diagnostic.path.total_segment_count <= 32 {
+		testing.expect_value(t, diagnostic.path.segment_count, u8(diagnostic.path.total_segment_count))
+		testing.expect_value(t, diagnostic.path.prefix_count, u8(diagnostic.path.total_segment_count))
+		testing.expect_value(t, diagnostic.path.omitted_segment_count, u16(0))
+		testing.expect(t, !diagnostic.path.truncated)
+	} else {
+		testing.expect_value(t, diagnostic.path.segment_count, u8(32))
+		testing.expect_value(t, diagnostic.path.prefix_count, u8(8))
+		testing.expect_value(
+			t, diagnostic.path.omitted_segment_count,
+			diagnostic.path.total_segment_count-32,
+		)
+		testing.expect(t, diagnostic.path.truncated)
+	}
 	return data
 }
 

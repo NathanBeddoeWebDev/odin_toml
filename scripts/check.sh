@@ -18,6 +18,7 @@ mkdir -p build/reports
 } > build/reports/compiler.txt
 
 scripts/check_public_api.py
+scripts/check_diagnostic_ledger.py
 
 common=(-vet -vet-style -warnings-as-errors)
 odin check . -no-entry-point "${common[@]}"
@@ -69,6 +70,10 @@ for mode in minimal speed; do
     -define:ODIN_TEST_RANDOM_SEED=123456789 \
     -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true
   odin test tests/typed_unmarshal "-o:$mode" "${common[@]}" \
+    -define:ODIN_TEST_THREADS=1 \
+    -define:ODIN_TEST_RANDOM_SEED=123456789 \
+    -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true
+  odin test tests/diagnostic_acceptance "-o:$mode" "${common[@]}" \
     -define:ODIN_TEST_THREADS=1 \
     -define:ODIN_TEST_RANDOM_SEED=123456789 \
     -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true

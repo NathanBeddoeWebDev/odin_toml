@@ -212,6 +212,11 @@ test_registration_rejects_invalid_registry_typeid_and_callback :: proc(t: ^testi
 
 	expect_registry_data_error(
 		t,
+		toml.register_marshaler(nil, nil, {}),
+		.Invalid_Registry,
+	)
+	expect_registry_data_error(
+		t,
 		toml.register_marshaler(nil, id, marshaler),
 		.Invalid_Registry,
 	)
@@ -226,6 +231,11 @@ test_registration_rejects_invalid_registry_typeid_and_callback :: proc(t: ^testi
 	testing.expect(t, init_error == nil)
 	defer toml.destroy_codec_registry(&registry)
 	zero_id: typeid
+	expect_registry_data_error(
+		t,
+		toml.register_marshaler(&registry, zero_id, {}),
+		.Invalid_Type_ID,
+	)
 	expect_registry_data_error(
 		t,
 		toml.register_marshaler(&registry, zero_id, marshaler),
@@ -248,6 +258,12 @@ test_registration_rejects_invalid_registry_typeid_and_callback :: proc(t: ^testi
 	)
 	testing.expect_value(t, len(registry.marshalers), 0)
 	testing.expect_value(t, len(registry.unmarshalers), 0)
+	assert(toml.register_marshaler(&registry, id, marshaler) == nil)
+	expect_registry_data_error(
+		t,
+		toml.register_marshaler(&registry, id, {}),
+		.Nil_Callback,
+	)
 
 	registry.initialized = false
 	expect_registry_data_error(

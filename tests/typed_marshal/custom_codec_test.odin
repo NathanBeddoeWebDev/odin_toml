@@ -704,9 +704,11 @@ test_marshal_codec_values_use_semantic_validation_and_cleanup :: proc(t: ^testin
 				data, data_ok := diagnostic.detail.(toml.Marshal_Data_Error)
 				testing.expect(t, data_ok)
 				if data_ok {
-					testing.expect_value(t, data.kind, test_case.kind)
-					testing.expect_value(t, data.source_type, typeid_of(Codec_Invalid_Value))
-					testing.expect_value(t, data.temporal_error, test_case.temporal)
+					testing.expect_value(t, data, toml.Marshal_Data_Error{
+						kind = test_case.kind,
+						source_type = typeid_of(Codec_Invalid_Value),
+						temporal_error = test_case.temporal,
+					})
 				}
 			}
 			name, name_ok := diagnostic.path.segments[0].(string)
@@ -714,7 +716,11 @@ test_marshal_codec_values_use_semantic_validation_and_cleanup :: proc(t: ^testin
 			if name_ok {
 				testing.expect_value(t, name, "value")
 			}
+			testing.expect_value(t, diagnostic.path.segment_count, u8(1))
+			testing.expect_value(t, diagnostic.path.prefix_count, u8(1))
 			testing.expect_value(t, diagnostic.path.total_segment_count, u16(1))
+			testing.expect_value(t, diagnostic.path.omitted_segment_count, u16(0))
+			testing.expect(t, !diagnostic.path.truncated)
 		}
 		testing.expect_value(t, state.call_count, 1)
 		testing.expect_value(t, allocator_state.live_count, 0)
@@ -922,7 +928,35 @@ test_marshal_codec_configuration_and_callback_failures_are_distinct :: proc(t: ^
 		if name_ok {
 			testing.expect_value(t, name, "value")
 		}
+		testing.expect_value(t, diagnostic.path.segment_count, u8(1))
+		testing.expect_value(t, diagnostic.path.prefix_count, u8(1))
 		testing.expect_value(t, diagnostic.path.total_segment_count, u16(1))
+		testing.expect_value(t, diagnostic.path.omitted_segment_count, u16(0))
+		testing.expect(t, !diagnostic.path.truncated)
+	}
+
+	code = 0x1357_2468
+	failed, err = toml.marshal(
+		Codec_Failing_Root{value = 4},
+		{codecs = &registry},
+	)
+	testing.expect(t, raw_data(failed) == nil)
+	diagnostic, diagnostic_ok = err.(toml.Marshal_Diagnostic)
+	testing.expect(t, diagnostic_ok)
+	if diagnostic_ok {
+		codec_error, codec_ok := diagnostic.detail.(toml.Marshal_Codec_Error)
+		testing.expect(t, codec_ok)
+		if codec_ok {
+			testing.expect_value(t, codec_error, toml.Marshal_Codec_Error{
+				registered_type = typeid_of(Codec_Failing_Value),
+				code = 0x1357_2468,
+			})
+		}
+		testing.expect_value(t, diagnostic.path.segment_count, u8(1))
+		testing.expect_value(t, diagnostic.path.prefix_count, u8(1))
+		testing.expect_value(t, diagnostic.path.total_segment_count, u16(1))
+		testing.expect_value(t, diagnostic.path.omitted_segment_count, u16(0))
+		testing.expect(t, !diagnostic.path.truncated)
 	}
 
 	failed, err = toml.marshal(

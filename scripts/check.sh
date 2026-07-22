@@ -60,6 +60,10 @@ for mode in minimal speed; do
     -define:ODIN_TEST_THREADS=1 \
     -define:ODIN_TEST_RANDOM_SEED=123456789 \
     -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true
+  odin test tests/semantic_fuzz "-o:$mode" "${common[@]}" \
+    -define:ODIN_TEST_THREADS=1 \
+    -define:ODIN_TEST_RANDOM_SEED=123456789 \
+    -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true
   odin test tests/scalar_parse "-o:$mode" "${common[@]}" \
     -define:ODIN_TEST_THREADS=1 \
     -define:ODIN_TEST_RANDOM_SEED=123456789 \
@@ -111,6 +115,17 @@ for mode in minimal speed; do
   odin build tests/consumer_typed "-o:$mode" "${common[@]}" -out:"$work/typed-$mode"
   odin build examples/semantic_lifecycle "-o:$mode" "${common[@]}" -out:"$work/semantic-lifecycle-$mode"
   "$work/semantic-lifecycle-$mode"
+
+  odin build tests/semantic_fuzz "-o:$mode" "${common[@]}" -out:"$work/semantic-fuzz-$mode"
+  printf 'value = [1, 2, 3]\n' | "$work/semantic-fuzz-$mode" strict-parse
+  printf 'value = "α"\n' | "$work/semantic-fuzz-$mode" valid-utf8
+  printf 'value = { nested = [1, 2, 3] }\n' | "$work/semantic-fuzz-$mode" parse-unparse
+  printf '\003semantic-owner' | "$work/semantic-fuzz-$mode" semantic-lifecycle
+  printf '\001\002\003writer' | "$work/semantic-fuzz-$mode" writer-validation
+
+  odin build cmd/toml_test_encoder -file "-o:$mode" "${common[@]}" -out:"$work/encoder-fuzz-$mode"
+  printf '{"malformed":' | "$work/encoder-fuzz-$mode" --fuzz-target
+  printf '{"value":{"type":"integer","value":"42"}}' | "$work/encoder-fuzz-$mode" --fuzz-target
 done
 
 scripts/probe_rtti.sh

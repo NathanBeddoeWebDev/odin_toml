@@ -21,7 +21,7 @@ jobs:
           (cd "$RUNNER_TEMP/Odin" && ./build_odin.sh release-native)
           echo "$RUNNER_TEMP/Odin" >> "$GITHUB_PATH"
       - name: Set up Go
-        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3934dcc763f
+        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a
         with:
           go-version: stable
       - name: Prepare pinned test-only dependencies
@@ -73,7 +73,7 @@ jobs:
         shell: bash
         run: echo "$RUNNER_TEMP/Odin" >> "$GITHUB_PATH"
       - name: Set up Go
-        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3934dcc763f
+        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a
         with:
           go-version: stable
       - name: Prepare pinned test-only dependencies

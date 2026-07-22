@@ -5,6 +5,12 @@ import "core:reflect"
 import temporal "temporal"
 
 @(private)
+Unmarshal_Source :: struct {
+	value: Source_Byte_Range,
+	ok:    bool,
+}
+
+@(private)
 Unmarshal_State :: struct {
 	allocator: runtime.Allocator,
 	loc:       runtime.Source_Code_Location,
@@ -69,12 +75,28 @@ unmarshal_path_snapshot :: proc(state: ^Unmarshal_State) -> Encode_Diagnostic_Pa
 }
 
 @(private)
+unmarshal_public_source :: proc(
+	state: ^Unmarshal_State,
+	source: Unmarshal_Source,
+) -> Optional_Source_Range {
+	if !source.ok {
+		return {}
+	}
+	return {
+		value = source_range(
+			state.parser.input, source.value.start, source.value.end,
+		),
+		ok = true,
+	}
+}
+
+@(private)
 unmarshal_diagnostic_detail :: proc(
 	state: ^Unmarshal_State,
 	kind: Unmarshal_Data_Error_Kind,
 	destination_type: typeid,
 	source_kind: Value_Kind,
-	source: Optional_Source_Range,
+	source: Unmarshal_Source,
 	related_type: typeid,
 	expected_count, actual_count: int,
 ) -> Unmarshal_Error {
@@ -87,7 +109,7 @@ unmarshal_diagnostic_detail :: proc(
 			expected_count = expected_count,
 			actual_count = actual_count,
 		},
-		source = source,
+		source = unmarshal_public_source(state, source),
 		path = unmarshal_path_snapshot(state),
 	}
 }
@@ -98,7 +120,7 @@ unmarshal_diagnostic :: proc(
 	kind: Unmarshal_Data_Error_Kind,
 	destination_type: typeid,
 	source_kind: Value_Kind,
-	source: Optional_Source_Range = {},
+	source: Unmarshal_Source = {},
 	expected_count := 0,
 	actual_count := 0,
 ) -> Unmarshal_Error {
@@ -115,7 +137,7 @@ unmarshal_diagnostic :: proc(
 }
 
 @(private)
-unmarshal_source :: proc(source: Source_Range) -> Optional_Source_Range {
+unmarshal_source :: proc(source: Source_Byte_Range) -> Unmarshal_Source {
 	return {value = source, ok = true}
 }
 
@@ -123,7 +145,7 @@ unmarshal_source :: proc(source: Source_Range) -> Optional_Source_Range {
 unmarshal_push_path :: proc(
 	state: ^Unmarshal_State,
 	segment: Encode_Diagnostic_Path_Segment,
-	source: Source_Range,
+	source: Source_Byte_Range,
 	destination_type: typeid,
 	source_kind: Value_Kind,
 ) -> Unmarshal_Error {
@@ -157,7 +179,7 @@ unmarshal_pop_path :: proc(state: ^Unmarshal_State) {
 @(private)
 unmarshal_enter_unstable_key :: proc(
 	state: ^Unmarshal_State,
-	source: Source_Range,
+	source: Source_Byte_Range,
 	destination_type: typeid,
 	source_kind: Value_Kind,
 ) -> Unmarshal_Error {
@@ -204,7 +226,7 @@ unmarshal_plan_error :: proc(
 	state: ^Unmarshal_State,
 	err: Marshal_Error,
 	destination_type: typeid,
-	source: Optional_Source_Range,
+	source: Unmarshal_Source,
 ) -> Unmarshal_Error {
 	if err == nil {
 		return nil
@@ -248,7 +270,7 @@ unmarshal_plan_error :: proc(
 unmarshal_struct_plan :: proc(
 	state: ^Unmarshal_State,
 	destination_type: typeid,
-	source: Optional_Source_Range,
+	source: Unmarshal_Source,
 ) -> (Marshal_Struct_Plan, Unmarshal_Error) {
 	plan, err := marshal_struct_plan_build(&state.builder, destination_type)
 	if err != nil {
@@ -286,7 +308,7 @@ unmarshal_type_leave :: proc(state: ^Unmarshal_State, entered: bool) {
 unmarshal_validate_declared_type :: proc(
 	state: ^Unmarshal_State,
 	destination_type: typeid,
-	source: Optional_Source_Range,
+	source: Unmarshal_Source,
 ) -> Unmarshal_Error {
 	if unmarshal_codec_registered(state, destination_type) {
 		return nil
@@ -482,10 +504,10 @@ unmarshal_float_fits :: proc(value: Float, destination_type: typeid) -> bool {
 unmarshal_source_for_entry :: proc(
 	state: ^Unmarshal_State,
 	parent_node, parent_range, entry_index: int,
-	fallback: Source_Range,
+	fallback: Source_Byte_Range,
 ) -> (
 	node_id, binding_range_id: int,
-	key_source, value_source: Source_Range,
+	key_source, value_source: Source_Byte_Range,
 ) {
 	if parent_node >= 0 {
 		node_id = parser_node_for_entry(&state.parser, parent_node, entry_index)
@@ -494,13 +516,7 @@ unmarshal_source_for_entry :: proc(
 		}
 		if node_id != 0 {
 			node := state.parser.nodes[node_id-1]
-			key_source = source_range(
-				state.parser.input, node.key_range.start, node.key_range.end,
-			)
-			value_source = source_range(
-				state.parser.input, node.value_range.start, node.value_range.end,
-			)
-			return node_id, node.binding_range_id, key_source, value_source
+			return node_id, node.binding_range_id, node.key_range, node.value_range
 		}
 	}
 	if parent_range > 0 {
@@ -555,7 +571,7 @@ unmarshal_preflight_value :: proc(
 	source: Value,
 	destination: any,
 	node_id, binding_range_id: int,
-	source_range: Source_Range,
+	source_range: Source_Byte_Range,
 	implicit_zero := false,
 ) -> Unmarshal_Error {
 	kind := unmarshal_value_kind(source)
@@ -821,7 +837,7 @@ unmarshal_preflight_fixed_array :: proc(
 	element_type: typeid,
 	element_size: int,
 	parent_node, binding_range_id: int,
-	fallback_source: Source_Range,
+	fallback_source: Source_Byte_Range,
 	implicit_zero := false,
 ) -> Unmarshal_Error {
 	for child, index in source {
@@ -863,7 +879,7 @@ unmarshal_preflight_sequence :: proc(
 	element_type: typeid,
 	element_size: int,
 	parent_node, binding_range_id: int,
-	fallback_source: Source_Range,
+	fallback_source: Source_Byte_Range,
 ) -> Unmarshal_Error {
 	if element_size < 0 || len(source) > 0 && element_size > max(int)/len(source) {
 		return unmarshal_diagnostic(
@@ -1011,7 +1027,7 @@ unmarshal_preflight_map :: proc(
 	source: Table,
 	value_type: typeid,
 	parent_node, parent_range: int,
-	fallback_source: Source_Range,
+	fallback_source: Source_Byte_Range,
 ) -> Unmarshal_Error {
 	for entry, index in source {
 		node_id, binding_range_id, _, value_source := unmarshal_source_for_entry(
@@ -1045,11 +1061,11 @@ unmarshal_preflight_struct :: proc(
 	source: Table,
 	destination: any,
 	parent_node, parent_range: int,
-	fallback_source: Source_Range,
+	fallback_source: Source_Byte_Range,
 	implicit_zero := false,
 ) -> Unmarshal_Error {
 	optional_source := unmarshal_source(fallback_source)
-	if parent_node == 0 && parent_range == 0 && fallback_source == (Source_Range{}) {
+	if parent_node == 0 && parent_range == 0 && fallback_source == (Source_Byte_Range{}) {
 		optional_source = {}
 	}
 	plan, plan_error := unmarshal_struct_plan(state, destination.id, optional_source)
@@ -1327,7 +1343,7 @@ unmarshal_assign_sequence :: proc(
 	element_type: typeid,
 	element_size: int,
 	parent_node, parent_range: int,
-	fallback_source: Source_Range,
+	fallback_source: Source_Byte_Range,
 ) -> Unmarshal_Error {
 	for child, index in source {
 		child_node_id, child_range_id, _, child_source := unmarshal_source_for_entry(
@@ -1414,7 +1430,7 @@ unmarshal_assign_map :: proc(
 	destination: any,
 	metadata: runtime.Type_Info_Map,
 	parent_node, parent_range: int,
-	fallback_source: Source_Range,
+	fallback_source: Source_Byte_Range,
 ) -> Unmarshal_Error {
 	raw_map := (^runtime.Raw_Map)(destination.data)
 	if len(source) == 0 {
@@ -1539,7 +1555,7 @@ unmarshal_assign_value :: proc(
 	source: Value,
 	destination: any,
 	node_id, binding_range_id: int,
-	source_range: Optional_Source_Range,
+	source_range: Unmarshal_Source,
 ) -> Unmarshal_Error {
 	if codec_error, handled := unmarshal_codec_value(
 		state, source, destination, source_range,
@@ -1562,7 +1578,7 @@ unmarshal_assign_value :: proc(
 		(^temporal.Local_Time)(destination.data)^ = source.(temporal.Local_Time)
 		return nil
 	}
-	fallback_source := Source_Range{}
+	fallback_source := Source_Byte_Range{}
 	if source_range.ok {fallback_source = source_range.value}
 	info := reflect.type_info_base(type_info_of(destination.id))
 	#partial switch metadata in info.variant {
@@ -1686,7 +1702,7 @@ unmarshal_assign_struct :: proc(
 	source: Table,
 	destination: any,
 	parent_node, parent_range: int,
-	fallback_source: Source_Range,
+	fallback_source: Source_Byte_Range,
 ) -> Unmarshal_Error {
 	parser := Marshal_Builder{max_depth = SEMANTIC_MAX_DEPTH}
 	for entry, index in source {

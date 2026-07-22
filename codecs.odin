@@ -196,7 +196,7 @@ unmarshal_codec_value :: proc(
 	state: ^Unmarshal_State,
 	source: Value,
 	destination: any,
-	source_range: Optional_Source_Range,
+	source_range: Unmarshal_Source,
 ) -> (Unmarshal_Error, bool) {
 	if !unmarshal_codec_registered(state, destination.id) {
 		return nil, false
@@ -225,7 +225,7 @@ unmarshal_codec_value :: proc(
 			registered_type = destination.id,
 			code = failure.code,
 		},
-		source = source_range,
+		source = unmarshal_public_source(state, source_range),
 		path = unmarshal_path_snapshot(state),
 	}, true
 }

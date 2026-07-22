@@ -13,8 +13,8 @@ Parser_Node_Location :: enum u8 {
 Binding_Range_Node :: struct {
 	parent:         int,
 	semantic_index: int,
-	key_source:     Source_Range,
-	source:         Source_Range,
+	key_source:     Source_Byte_Range,
+	source:         Source_Byte_Range,
 }
 
 @(private)
@@ -68,7 +68,7 @@ parser_make_binding_ranges :: proc(
 @(private)
 parser_append_binding_range :: proc(
 	state: ^Parser_State,
-	source: Source_Range,
+	source: Source_Byte_Range,
 	start, end: int,
 ) -> (int, Parse_Error) {
 	if !state.capture_binding_ranges {
@@ -134,7 +134,7 @@ parser_binding_range_attach :: proc(
 parser_binding_range_set_key_source :: proc(
 	state: ^Parser_State,
 	range_id: int,
-	source: Source_Range,
+	source: Source_Byte_Range,
 ) {
 	if range_id == 0 {
 		return
@@ -152,7 +152,7 @@ parser_binding_range_finish :: proc(
 		return
 	}
 	assert(0 < range_id && range_id <= len(state.binding_ranges))
-	state.binding_ranges[range_id-1].source = source_range(state.input, start, end)
+	state.binding_ranges[range_id-1].source = {start, end}
 }
 
 @(private)
@@ -165,7 +165,7 @@ parser_capture_value_range :: proc(
 		return true
 	}
 	range_id, err := parser_append_binding_range(
-		state, source_range(state.input, start, end), start, end,
+		state, {start, end}, start, end,
 	)
 	if err != nil {
 		container_store_error(state, err)

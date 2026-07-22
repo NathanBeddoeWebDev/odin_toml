@@ -396,7 +396,7 @@ parser_parse_array :: proc(
 		destroy_value_with_gate(&value, &state.gate, state.loc)
 	}
 	range_id, range_error := parser_append_binding_range(
-		state, source_range(state.input, start, start+1), start, start+1,
+		state, {start, start+1}, start, start+1,
 	)
 	if range_error != nil {
 		container_store_error(state, range_error)
@@ -485,7 +485,7 @@ parser_parse_array :: proc(
 @(private)
 Inline_Entry_Metadata :: struct {
 	form:  Parse_Definition_Form,
-	range: Source_Range,
+	range: Source_Byte_Range,
 	child: ^Inline_Table_State,
 }
 
@@ -598,7 +598,7 @@ inline_definition_error :: proc(
 	kind: Parse_Definition_Error_Kind,
 	existing, attempted: Parse_Definition_Form,
 	primary: Source_Byte_Range,
-	related: Source_Range,
+	related: Source_Byte_Range,
 ) -> Parse_Error {
 	return parse_diagnostic(
 		state,
@@ -606,7 +606,9 @@ inline_definition_error :: proc(
 		primary.start,
 		primary.end,
 		.Current,
-		Optional_Source_Range{related, true},
+		Optional_Source_Range{
+			source_range(state.input, related.start, related.end), true,
+		},
 	)
 }
 
@@ -634,7 +636,7 @@ inline_new_child :: proc(
 		return nil, err
 	}
 	child.binding_range_id, err = parser_append_binding_range(
-		state, source_range(state.input, start, end), start, end,
+		state, {start, end}, start, end,
 	)
 	if err != nil {
 		destroy_table_with_gate(&child.table, &state.gate, state.loc)
@@ -818,7 +820,7 @@ parser_parse_inline_table :: proc(
 	}
 	range_error: Parse_Error
 	root.binding_range_id, range_error = parser_append_binding_range(
-		state, source_range(state.input, start, start+1), start, start+1,
+		state, {start, start+1}, start, start+1,
 	)
 	if range_error != nil {
 		container_store_error(state, range_error)
@@ -936,7 +938,7 @@ parser_parse_inline_table :: proc(
 				child.table = empty_table
 				metadata := Inline_Entry_Metadata{
 					form = .Dotted_Table,
-					range = source_range(state.input, key_range.start, key_range.end),
+					range = key_range,
 					child = child,
 				}
 				if !container_try_inline_append(
@@ -1001,7 +1003,7 @@ parser_parse_inline_table :: proc(
 		}
 		metadata := Inline_Entry_Metadata{
 			form = form,
-			range = source_range(state.input, leaf_range.start, value_end),
+			range = {leaf_range.start, value_end},
 		}
 		leaf_entry_index := len(current.table)
 		if !container_try_inline_append(
@@ -1018,7 +1020,7 @@ parser_parse_inline_table :: proc(
 		parser_binding_range_set_key_source(
 			state,
 			value_range_id,
-			source_range(state.input, leaf_range.start, leaf_range.end),
+			leaf_range,
 		)
 		value_owned = false
 		leaf_owned = false

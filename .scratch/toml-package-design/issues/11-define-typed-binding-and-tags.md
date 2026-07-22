@@ -132,7 +132,7 @@ The generic binder explicitly rejects enums, bit sets, complex and quaternion nu
 
 Validate declared map-value and sequence-element types even when their current or source container has no elements. Empty `map[string]Unsupported`, `[0]Unsupported`, `[]Unsupported`, and `[dynamic]Unsupported` values are unsupported without an exact codec rather than conditionally becoming valid while empty.
 
-The typed APIs require normal Odin RTTI and are unsupported in builds using `ODIN_NO_RTTI`. This requirement does not change the semantic-document workflow's data model.
+The complete `toml` package requires normal Odin RTTI because its frozen typed APIs contain `any`. Builds using `ODIN_NO_RTTI` are unsupported even for semantic-only consumers; this package-wide build requirement does not change the semantic-document workflow's data model.
 
 ### Unmarshal pipeline and destination state
 

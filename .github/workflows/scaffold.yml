@@ -24,8 +24,6 @@ jobs:
         run: scripts/prepare_test_dependencies.sh
       - name: Compile public packages and external consumers
         run: scripts/check.sh
-      - name: Reproduce open RTTI-disabled design gate
-        run: scripts/probe_no_rtti.sh
       - name: Print compiler environment
         if: always()
         run: test ! -f build/reports/compiler.txt || cat build/reports/compiler.txt

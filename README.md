@@ -40,13 +40,7 @@ scripts/check.sh
 
 The command captures `odin version` and `odin report` in `build/reports/compiler.txt`, checks the frozen generated API snapshots, rejects runtime oracle dependencies, and compiles both external consumers in normal and `-o:speed` modes.
 
-RTTI-disabled compilation currently exposes a pinned-compiler incompatibility rather than a package workaround:
-
-```sh
-scripts/probe_no_rtti.sh
-```
-
-See [`design-reviews/001-reference-odin-no-rtti.md`](design-reviews/001-reference-odin-no-rtti.md). Typed binding requires RTTI by contract.
+The complete `toml` package requires normal RTTI because its frozen typed-binding declarations use `any`. `ODIN_NO_RTTI` builds are unsupported, including semantic-only consumers. [`design-reviews/001-reference-odin-no-rtti.md`](design-reviews/001-reference-odin-no-rtti.md) records the pinned-compiler evidence and approved resolution; `scripts/probe_no_rtti.sh` remains only as a historical reproducer.
 
 ## Test-only dependency pins
 

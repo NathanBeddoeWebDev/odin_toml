@@ -528,6 +528,49 @@ canonical_encoding_plan_build :: proc(
 	return
 }
 
+@(private)
+canonical_encoding_plan_emit_allocated :: proc(
+	plan: ^Canonical_Encoding_Plan,
+	root: Table,
+	allocator: mem.Allocator,
+	loc: runtime.Source_Code_Location,
+) -> (string, Unparse_Error) {
+	if plan.encoded_size == 0 {
+		return "", nil
+	}
+	memory, allocation_error := allocator_allocate(plan.encoded_size, allocator, false, loc)
+	if allocation_error != nil {
+		return "", allocation_error
+	}
+	if memory == nil {
+		return "", runtime.Allocator_Error.Out_Of_Memory
+	}
+	output := mem.byte_slice(memory, plan.encoded_size)
+	emitter := Canonical_Encoder{mode = .Output, output = output}
+	emission_error := canonical_encode_table(&emitter, root, true, nil)
+	assert(emission_error == nil && emitter.count == len(output))
+	return string(output), nil
+}
+
+@(private)
+canonical_encoding_plan_emit_writer :: proc(
+	plan: ^Canonical_Encoding_Plan,
+	root: Table,
+	writer: io.Writer,
+) -> Unparse_Error {
+	if plan.encoded_size == 0 {
+		return nil
+	}
+	emitter := Canonical_Encoder{mode = .Writer, writer = writer}
+	emission_error := canonical_encode_table(&emitter, root, true, nil)
+	assert(emission_error == nil)
+	if emitter.writer_error != nil {
+		return emitter.writer_error
+	}
+	assert(emitter.count == plan.encoded_size)
+	return nil
+}
+
 @(require_results)
 unparse :: proc(
 	doc: ^Document,
@@ -550,22 +593,7 @@ unparse :: proc(
 		return "", plan_error
 	}
 	defer canonical_encoding_plan_destroy(&plan, loc)
-	if plan.encoded_size == 0 {
-		return "", nil
-	}
-
-	memory, allocation_error := allocator_allocate(plan.encoded_size, allocator, false, loc)
-	if allocation_error != nil {
-		return "", allocation_error
-	}
-	if memory == nil {
-		return "", runtime.Allocator_Error.Out_Of_Memory
-	}
-	output := mem.byte_slice(memory, plan.encoded_size)
-	emitter := Canonical_Encoder{mode = .Output, output = output}
-	emission_error := canonical_encode_table(&emitter, doc.root, true, nil)
-	assert(emission_error == nil && emitter.count == len(output))
-	return string(output), nil
+	return canonical_encoding_plan_emit_allocated(&plan, doc.root, allocator, loc)
 }
 
 @(require_results)
@@ -593,16 +621,5 @@ unparse_to_writer :: proc(
 		return plan_error
 	}
 	defer canonical_encoding_plan_destroy(&plan, loc)
-	if plan.encoded_size == 0 {
-		return nil
-	}
-
-	emitter := Canonical_Encoder{mode = .Writer, writer = writer}
-	emission_error := canonical_encode_table(&emitter, doc.root, true, nil)
-	assert(emission_error == nil)
-	if emitter.writer_error != nil {
-		return emitter.writer_error
-	}
-	assert(emitter.count == plan.encoded_size)
-	return nil
+	return canonical_encoding_plan_emit_writer(&plan, doc.root, writer)
 }

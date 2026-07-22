@@ -1,10 +1,10 @@
 # Design review 001 — frozen typed declarations prevent RTTI-disabled package compilation
 
-Status: open blocker
+Status: resolved by approved contract change
 
-## Contract in conflict
+## Resolution
 
-The approved design requires the public `toml` package to retain the frozen typed API (`any` callback and marshal parameters) while semantic workflows remain compilable with RTTI disabled.
+The approved contract now requires normal RTTI for the complete public `toml` package. Semantic-only `ODIN_NO_RTTI` builds are unsupported because the frozen typed API retains its `any` callback and marshal parameters. The reproduction below remains as historical compiler evidence; it is no longer an acceptance gate or implementation blocker.
 
 ## Reproduction
 
@@ -45,6 +45,6 @@ The available workarounds alter the approved interface or package architecture:
 - replace frozen `any`, `mem.Allocator`, temporal conversion, or registry declarations conditionally;
 - compile with RTTI and merely define a project-local capability flag.
 
-Those are not syntax-only transcription adjustments. The design explicitly requires escalation rather than a weakened contract, so the RTTI-disabled acceptance item remains unresolved pending an approved design change or compiler change. Normal and optimized hosted builds are unaffected.
+Those are not syntax-only transcription adjustments. The design was therefore escalated rather than worked around. The approved resolution removes RTTI-disabled package support while preserving the frozen public API, one-package architecture, semantic model, and pinned compiler.
 
-Issue 03's RTTI-enabled mechanisms are all green in minimal and optimized modes. The checked feature-to-mechanism evidence and gate decision are recorded in [`rtti-feasibility-matrix.md`](rtti-feasibility-matrix.md). Reflection-dependent implementation remains blocked; independent semantic and temporal work may continue in ordinary RTTI-enabled builds.
+Issue 03's RTTI-enabled mechanisms are green in minimal and optimized modes. The checked feature-to-mechanism evidence and resolved gate decision are recorded in [`rtti-feasibility-matrix.md`](rtti-feasibility-matrix.md). Reflection-dependent implementation may proceed in normal RTTI-enabled builds.

@@ -1,6 +1,6 @@
 # Reference-Odin typed-binding feasibility matrix
 
-Status: checked; semantic `-no-rtti` compilation remains blocked by [design review 001](001-reference-odin-no-rtti.md)
+Status: checked; normal-RTTI gate passed and [design review 001](001-reference-odin-no-rtti.md) resolved by removing RTTI-disabled package support
 
 Compiler: Odin `dev-2026-07:2c25fb924` (`2c25fb92420bfa31da62e2194b0cc2cb8bd54cf8`)
 
@@ -34,24 +34,24 @@ The executable evidence is `tests/rtti_probe/main.odin`. `scripts/probe_rtti.sh`
 | Active recursion-cycle detection | Reflected pointer, slice, dynamic-array, and map identities are extractable from destination descriptors while traversal is active | `probe_cycle_identity` observes a pointer self-cycle, repeated acyclic pointer identity, and equal backing identities for aliased slices, dynamic arrays, and maps | Proven |
 | Explicit rejection of unsupported kinds | Exact/underlying `Type_Kind` is the common discriminator for the closed unsupported-kind policy; no layout reinterpretation is needed | `probe_binding_type_metadata` runs named and direct unsupported discriminators (`Enum`, `Procedure`, `Type_Id`, `Any`); the pinned `Type_Kind`/`Type_Info` variants map every remaining issue-11 category | Proven mechanism; rejection behavior remains for typed-binding tickets |
 | Checked destination size/alignment | `Type_Info.size`/`.align`, `reflect.size_of_typeid`, and `align_of_typeid` are available for checked arithmetic and allocation | Array/container metadata and aligned sentinel probes | Proven |
-| Semantic consumer under `ODIN_NO_RTTI` | Required contract is that semantic import remains available while typed binding is unavailable | `scripts/probe_no_rtti.sh` checks `tests/consumer_semantic` on `freestanding_amd64_sysv`; compiler rejects frozen `any` declarations in `marshal.odin`/`codecs.odin` and imported core declarations | **Missing — design blocker 001** |
-| Typed entry points under `ODIN_NO_RTTI` | Reference Odin's `-no-rtti` compiler diagnostic makes `any`/reflection unavailable | Same probe captures the exact unavailable boundary; changing declarations or package architecture would change the approved contract | Documented unavailable capability; no workaround approved |
+| Complete package under `ODIN_NO_RTTI` | Unsupported by the resolved package contract | Historical `scripts/probe_no_rtti.sh` reproduction shows the pinned compiler rejecting frozen `any` declarations in `marshal.odin`/`codecs.odin` and imported core declarations | Not applicable — normal RTTI is required |
 
 ## Gate decision
 
-All RTTI-enabled mechanisms required by the approved typed-binding contract are feasible on the pinned compiler. The separate requirement that semantic workflows compile with RTTI disabled is not feasible with the frozen package interface: importing the semantic consumer still causes Reference Odin to type-check public typed declarations containing `any`, and Reference Odin also has unguarded `any` declarations in imported core packages.
+All normal-RTTI mechanisms required by the approved typed-binding contract are feasible on the pinned compiler. The former semantic-only RTTI-disabled requirement was infeasible with the frozen package interface because importing the package still type-checks public typed declarations containing `any`.
 
-This is a design-review blocker, not permission to omit typed declarations, split or conditionally narrow the public package, replace frozen types, or pretend RTTI is disabled through a project flag. Reflection-dependent implementation tickets remain blocked by this gate until design review 001 is resolved. Independent work, including the `temporal` package, is unaffected.
+Design review 001 resolved that conflict by requiring normal RTTI for the complete package. The resolution does not omit typed declarations, split or conditionally narrow the package, replace frozen types, or simulate disabled RTTI through a project flag. Reflection-dependent implementation tickets may proceed.
 
 ## Reproduction
 
 ```sh
 scripts/probe_rtti.sh
+# Historical reproduction only; not an acceptance gate:
 scripts/probe_no_rtti.sh
 scripts/check.sh
 ```
 
-Generated reports are `build/reports/rtti-feasibility.txt` and `build/reports/no-rtti.txt`.
+The acceptance report is `build/reports/rtti-feasibility.txt`; the historical reproducer writes `build/reports/no-rtti.txt` when run manually.
 
 ## Authoritative mechanism sources
 

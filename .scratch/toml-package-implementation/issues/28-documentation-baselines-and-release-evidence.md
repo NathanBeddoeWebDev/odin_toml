@@ -7,7 +7,7 @@
 **Status:** ready-for-agent
 
 - [ ] Public examples compile and demonstrate parse ownership, mutation, clone/destroy, canonical allocated/writer output, typed marshal/unmarshal, partial cleanup, and codecs.
-- [ ] Documentation states borrow invalidation, allocator modes, exact cleanup responsibilities, registry concurrency, RTTI-disabled behavior, support matrix, strictness, semver policy, and non-goals.
+- [ ] Documentation states borrow invalidation, allocator modes, exact cleanup responsibilities, registry concurrency, the package-wide normal-RTTI requirement, support matrix, strictness, semver policy, and non-goals.
 - [ ] Parse, semantic encode, typed marshal/unmarshal, ordered-table, depth, map-sort, and codec-heavy benchmarks have reproducible commands and recorded non-gating results.
 - [ ] Inline canonical-profile encoded-size baselines are recorded without pass/fail thresholds.
 - [ ] The release manifest includes pinned compiler, corpus, oracle, conformance reports, property/fuzz seeds, allocator/writer sweeps, platform/mode jobs, and sanitizer/race evidence.

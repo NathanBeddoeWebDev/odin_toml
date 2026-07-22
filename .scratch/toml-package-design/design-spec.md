@@ -18,7 +18,7 @@ The repository will provide:
 
 The design follows the installed `core:encoding/json` package where familiarity and allocator explicitness help, but deliberately avoids global codec state, broad helper exposure, permissive parsing, incomplete duplicate checks, mixed allocator destruction, and fragile failure cleanup.
 
-Before 1.0, documented breaking changes are allowed. From 1.0, semantic versioning protects public declarations, ownership contracts, strict TOML 1.1 behavior, and deterministic output bytes. Initial compiler support is exactly the Reference Odin revision. Typed binding requires RTTI and is unavailable with `ODIN_NO_RTTI`; semantic document workflows do not require typed binding.
+Before 1.0, documented breaking changes are allowed. From 1.0, semantic versioning protects public declarations, ownership contracts, strict TOML 1.1 behavior, and deterministic output bytes. Initial compiler support is exactly the Reference Odin revision. The package requires normal RTTI in every build because its frozen public typed-binding declarations use `any`; `ODIN_NO_RTTI` builds are unsupported, including semantic-only consumers.
 
 ## 2. Module architecture and dependency direction
 
@@ -630,7 +630,7 @@ Exit: the package skeleton, exact public declarations, and test executables comp
 Deliver:
 
 - complete `temporal` values, validation, compare, and explicit conversions;
-- test-only compile probes for field/tag enumeration, destination-backed `any`, named-type handling, optional unions, zero-size pointer allocation, map/dynamic-array allocator behavior, and RTTI-disabled failure mode documentation.
+- test-only compile probes for field/tag enumeration, destination-backed `any`, named-type handling, optional unions, zero-size pointer allocation, and map/dynamic-array allocator behavior; document the package-wide normal-RTTI requirement.
 
 Exit: temporal matrix is green; every generic binding mechanism required by issue 11 is demonstrated against the exact compiler. Any missing compiler capability returns to design review.
 

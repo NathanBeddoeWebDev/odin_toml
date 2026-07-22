@@ -112,7 +112,7 @@ The package will expose only the high-level public workflows needed by applicati
 85. As an Odin application developer, I want callback allocator errors and nonzero application failure codes preserved distinctly, so that I can diagnose infrastructure and domain failures separately.
 86. As an Odin application developer, I want a frozen registry to support concurrent read-only calls, so that shared immutable codec policy does not require package-global state.
 87. As an Odin library maintainer, I want all non-interface declarations private, so that implementation algorithms can evolve without expanding compatibility obligations.
-88. As an Odin library maintainer, I want typed binding explicitly unavailable when RTTI is disabled while semantic workflows continue to work, so that capability boundaries are honest.
+88. As an Odin library maintainer, I want the package-wide normal-RTTI requirement stated explicitly, so that semantic-only consumers do not expect unsupported `ODIN_NO_RTTI` builds.
 89. As an Odin library maintainer, I want the initial compiler revision pinned, so that language and core-library behavior is reproducible during implementation.
 90. As an Odin library maintainer, I want the official TOML 1.1 conformance corpus pinned and run with explicit version selection, so that acceptance cannot drift silently.
 91. As an Odin library maintainer, I want deterministic independent float conversion and formatting oracles, so that self-round-tripping cannot mask a shared numerical defect.
@@ -126,7 +126,7 @@ The package will expose only the high-level public workflows needed by applicati
 ## Implementation Decisions
 
 - The implementation consists of the public `toml` package and a reusable public `temporal` package. `toml` depends on `temporal`; `temporal` never depends on `toml`.
-- The initial implementation targets exactly Reference Odin `dev-2026-07:2c25fb924`. Typed binding requires RTTI; semantic document workflows do not.
+- The initial implementation targets exactly Reference Odin `dev-2026-07:2c25fb924`. The complete `toml` package requires normal RTTI because its frozen typed-binding declarations use `any`; `ODIN_NO_RTTI` builds are unsupported.
 - The public interface is limited to complete-document parse, semantic unparse, typed marshal/unmarshal, writer output, semantic ownership lifecycle, direct table mutation, temporal operations, and codec registry lifecycle/registration.
 - The exact `toml` procedure surface is the `parse` overload group (`parse_bytes` and `parse_string`); `unparse` and `unparse_to_writer`; `marshal` and `marshal_to_writer`; `unmarshal` and `unmarshal_string`; `clone_document`, `destroy_document`, `clone_value`, and `destroy_value`; `get`, `set`, and `remove`; and `init_codec_registry`, `destroy_codec_registry`, `register_marshaler`, and `register_unmarshaler`. No encode/decode aliases or additional convenience families are introduced.
 - `Parse_Options` contains only `max_depth`. `Marshal_Options` contains `max_depth` and a borrowed codec-registry pointer. `Unmarshal_Options` contains `max_depth`, `reject_unknown_fields`, and a borrowed codec-registry pointer. Allocating and non-writer forms take options by value with a zero-value default; writer forms take a required stable options pointer. Allocator defaults are the context allocator and source-location defaults are caller location.

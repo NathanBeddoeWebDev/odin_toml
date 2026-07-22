@@ -138,6 +138,11 @@ marshal_declared_type_step :: proc(
 	if source_type == nil {
 		return nil, true, marshal_data_error(builder, .Unsupported_Type, source_type)
 	}
+	if source_type != typeid_of(any) && builder.codecs != nil {
+		if _, found := builder.codecs.marshalers[source_type]; found {
+			return nil, true, nil
+		}
+	}
 	if marshal_is_temporal_type(source_type) {
 		return nil, true, nil
 	}
@@ -637,6 +642,30 @@ marshal_root_table :: proc(
 	if value == nil {
 		zero_type: typeid
 		return {}, marshal_data_error(builder, .Unsupported_Nil, zero_type)
+	}
+	if value.id == typeid_of(any) {
+		unwrapped := (^any)(value.data)^
+		if unwrapped == nil {
+			return {}, marshal_data_error(builder, .Unsupported_Nil, value.id)
+		}
+		entered, reference_error := marshal_reference_enter(
+			builder, value.data, .Any, value.id,
+		)
+		if reference_error != nil {
+			return {}, reference_error
+		}
+		defer marshal_reference_leave(builder, entered)
+		return marshal_root_table(builder, unwrapped)
+	}
+	if codec_value, codec_error, handled := marshal_codec_value(builder, value); handled {
+		if codec_error != nil {
+			return {}, codec_error
+		}
+		if table, ok := codec_value.(Table); ok {
+			return table, nil
+		}
+		destroy_value(&codec_value, builder.allocator, builder.loc)
+		return {}, marshal_data_error(builder, .Invalid_Root_Shape, value.id)
 	}
 	if marshal_is_temporal_type(value.id) || marshal_is_semantic_binding_type(value.id) {
 		return {}, marshal_data_error(builder, .Invalid_Root_Shape, value.id)

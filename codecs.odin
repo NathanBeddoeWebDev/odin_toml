@@ -178,3 +178,39 @@ register_unmarshaler :: proc(
 	}
 	return register_directional_codec(&registry.unmarshalers, id, unmarshaler, loc)
 }
+
+@(private)
+marshal_codec_value :: proc(
+	builder: ^Marshal_Builder,
+	source: any,
+) -> (Value, Marshal_Error, bool) {
+	if builder.codecs == nil {
+		return {}, nil, false
+	}
+	marshaler, found := builder.codecs.marshalers[source.id]
+	if !found {
+		return {}, nil, false
+	}
+	value, callback_error := marshaler.procedure(
+		source,
+		marshaler.user_data,
+		builder.allocator,
+		builder.loc,
+	)
+	if callback_error == nil {
+		cached, cache_error := marshal_codec_cache_value(builder, source, value)
+		return cached, cache_error, true
+	}
+	if allocator_error, ok := callback_error.(runtime.Allocator_Error); ok {
+		return {}, allocator_error, true
+	}
+	failure := callback_error.(Codec_Callback_Failure)
+	assert(failure.code != 0, "codec callback failure codes must be nonzero")
+	return {}, Marshal_Diagnostic{
+		detail = Marshal_Codec_Error{
+			registered_type = source.id,
+			code = failure.code,
+		},
+		path = marshal_path_snapshot(builder),
+	}, true
+}

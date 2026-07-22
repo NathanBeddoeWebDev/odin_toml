@@ -14,14 +14,17 @@ Marshal_Builder :: struct {
 	path:      [SEMANTIC_MAX_DEPTH + 1]Encode_Diagnostic_Path_Segment,
 	path_count: int,
 	max_depth:  int,
+	codecs:     ^Codec_Registry,
 	active_references: [dynamic]Marshal_Active_Reference,
+	codec_owners:      [dynamic]Marshal_Codec_Owner,
 }
 
 @(private)
 Typed_Marshal_Plan :: struct {
-	document:  Document,
-	canonical: Canonical_Encoding_Plan,
-	initialized: bool,
+	document:     Document,
+	canonical:    Canonical_Encoding_Plan,
+	codec_owners: [dynamic]Marshal_Codec_Owner,
+	initialized:  bool,
 }
 
 @(private)
@@ -250,6 +253,9 @@ marshal_configuration :: proc(
 	} else if max_depth < 1 || max_depth > SEMANTIC_MAX_DEPTH {
 		return 0, marshal_configuration_error(.Invalid_Max_Depth)
 	}
+	if options.codecs != nil && !codec_registry_is_valid(options.codecs) {
+		return 0, marshal_configuration_error(.Invalid_Codec_Registry)
+	}
 	return max_depth, nil
 }
 
@@ -257,29 +263,38 @@ marshal_configuration :: proc(
 marshal_document_build :: proc(
 	value: any,
 	max_depth: int,
+	codecs: ^Codec_Registry,
 	allocator: mem.Allocator,
 	loc: runtime.Source_Code_Location,
-) -> (Document, Marshal_Error) {
+) -> (doc: Document, owners: [dynamic]Marshal_Codec_Owner, err: Marshal_Error) {
 	builder := Marshal_Builder{
 		allocator = allocator,
 		loc = loc,
 		max_depth = max_depth,
+		codecs = codecs,
 	}
 	if value == nil {
 		zero_type: typeid
-		return {}, marshal_data_error(&builder, .Unsupported_Nil, zero_type)
+		err = marshal_data_error(&builder, .Unsupported_Nil, zero_type)
+		return
 	}
 	gate_error: runtime.Allocator_Error
 	builder.gate, gate_error = allocator_release_gate_init(allocator, loc)
 	if gate_error != nil {
-		return {}, gate_error
+		err = gate_error
+		return
 	}
 	defer marshal_active_references_destroy(&builder)
 	root, root_error := marshal_root_table(&builder, value)
 	if root_error != nil {
-		return {}, root_error
+		marshal_codec_owners_destroy(&builder.codec_owners, allocator, loc)
+		err = root_error
+		return
 	}
-	return Document{root = root, allocator = allocator}, nil
+	doc = Document{root = root, allocator = allocator}
+	owners = builder.codec_owners
+	builder.codec_owners = nil
+	return
 }
 
 @(private)
@@ -291,6 +306,7 @@ typed_marshal_plan_destroy :: proc(
 		return
 	}
 	canonical_encoding_plan_destroy(&plan.canonical, loc)
+	marshal_codec_owners_destroy(&plan.codec_owners, plan.document.allocator, loc)
 	destroy_document(&plan.document, loc)
 	plan^ = {}
 }
@@ -299,10 +315,17 @@ typed_marshal_plan_destroy :: proc(
 typed_marshal_plan_build :: proc(
 	value: any,
 	max_depth: int,
+	codecs: ^Codec_Registry,
 	allocator: mem.Allocator,
 	loc: runtime.Source_Code_Location,
 ) -> (plan: Typed_Marshal_Plan, err: Marshal_Error) {
-	plan.document, err = marshal_document_build(value, max_depth, allocator, loc)
+	plan.document, plan.codec_owners, err = marshal_document_build(
+		value,
+		max_depth,
+		codecs,
+		allocator,
+		loc,
+	)
 	if err != nil {
 		return {}, err
 	}
@@ -334,7 +357,13 @@ marshal :: proc(
 	if configuration_error != nil {
 		return nil, configuration_error
 	}
-	plan, plan_error := typed_marshal_plan_build(value, max_depth, allocator, loc)
+	plan, plan_error := typed_marshal_plan_build(
+		value,
+		max_depth,
+		options_copy.codecs,
+		allocator,
+		loc,
+	)
 	if plan_error != nil {
 		return nil, plan_error
 	}
@@ -363,7 +392,13 @@ marshal_to_writer :: proc(
 	if configuration_error != nil {
 		return configuration_error
 	}
-	plan, plan_error := typed_marshal_plan_build(value, max_depth, allocator, loc)
+	plan, plan_error := typed_marshal_plan_build(
+		value,
+		max_depth,
+		options.codecs,
+		allocator,
+		loc,
+	)
 	if plan_error != nil {
 		return plan_error
 	}

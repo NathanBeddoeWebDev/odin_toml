@@ -30,6 +30,10 @@ Create each caller-owned `Codec_Registry` with `init_codec_registry`, register m
 
 Complete registration before sharing a registry. Concurrent read-only lookup through a frozen registry is supported; callers must separately synchronize any mutable callback state reached through `user_data`. Registration or destruction while any TOML call or other reader is using the registry is a caller contract violation. Destruction zeros the owner and is idempotent. There is no package-global codec registry.
 
+Typed marshal consults an exact registered source `typeid` before generic, named, temporal, or wrapper handling. `any` is unwrapped first, `omitempty` is decided before lookup, and map keys never consult codecs. A marshaler runs once for each encountered node during preflight and returns an owned semantic `Value`, never raw TOML. It must allocate every escaping string, key, array, and table with the supplied allocator and return no partial owner with an error. The package validates, caches, canonically emits, and destroys each successful returned value on every later path. Callback failure codes must be nonzero; callback allocator errors remain exact allocator errors.
+
+A callback borrows its source `any` and every pointer reachable through it only until return. It must not retain those borrows, mutate the marshal source, or directly or indirectly re-enter `marshal`, `marshal_to_writer`, `unmarshal`, or `unmarshal_string` during the active callback. Construct semantic values directly; semantic clone/destruction and temporal operations remain available under their normal ownership contracts.
+
 ## Reproducible checks
 
 The supported compiler is pinned in [`toolchain/odin.lock`](toolchain/odin.lock). With that compiler on `PATH`:

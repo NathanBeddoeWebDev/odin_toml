@@ -653,6 +653,12 @@ marshal_reflected_value :: proc(
 		zero_type: typeid
 		return {}, marshal_data_error(builder, .Unsupported_Nil, zero_type)
 	}
+	if value.id == typeid_of(any) {
+		return marshal_any_value(builder, value)
+	}
+	if codec_value, codec_error, handled := marshal_codec_value(builder, value); handled {
+		return codec_value, codec_error
+	}
 	if temporal_value, temporal_error, handled := marshal_temporal_value(builder, value); handled {
 		return temporal_value, temporal_error
 	}

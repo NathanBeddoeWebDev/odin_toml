@@ -3,7 +3,6 @@ package toml
 import "base:runtime"
 import "core:io"
 import "core:mem"
-import "core:reflect"
 import "core:unicode/utf8"
 import temporal "temporal"
 
@@ -15,6 +14,7 @@ Marshal_Builder :: struct {
 	path:      [SEMANTIC_MAX_DEPTH + 1]Encode_Diagnostic_Path_Segment,
 	path_count: int,
 	max_depth:  int,
+	active_references: [dynamic]Marshal_Active_Reference,
 }
 
 @(private)
@@ -269,23 +269,13 @@ marshal_document_build :: proc(
 		zero_type: typeid
 		return {}, marshal_data_error(&builder, .Unsupported_Nil, zero_type)
 	}
-	if marshal_is_temporal_type(value.id) || marshal_is_semantic_binding_type(value.id) {
-		return {}, marshal_data_error(&builder, .Invalid_Root_Shape, value.id)
-	}
-	info := reflect.type_info_base(type_info_of(value.id))
-	metadata, ok := info.variant.(runtime.Type_Info_Struct)
-	if !ok {
-		return {}, marshal_data_error(&builder, .Invalid_Root_Shape, value.id)
-	}
-	if .raw_union in metadata.flags {
-		return {}, marshal_data_error(&builder, .Unsupported_Type, value.id)
-	}
 	gate_error: runtime.Allocator_Error
 	builder.gate, gate_error = allocator_release_gate_init(allocator, loc)
 	if gate_error != nil {
 		return {}, gate_error
 	}
-	root, root_error := marshal_struct_table(&builder, value)
+	defer marshal_active_references_destroy(&builder)
+	root, root_error := marshal_root_table(&builder, value)
 	if root_error != nil {
 		return {}, root_error
 	}

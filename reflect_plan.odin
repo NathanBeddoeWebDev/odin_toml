@@ -567,8 +567,13 @@ marshal_is_empty :: proc(value: any) -> bool {
 	case runtime.Type_Info_Pointer:
 		return (^rawptr)(value.data)^ == nil
 	case runtime.Type_Info_Union:
-		return !metadata.no_nil && len(metadata.variants) == 1 &&
-		       reflect.union_variant_typeid(value) == nil
+		if metadata.no_nil || len(metadata.variants) != 1 {
+			return false
+		}
+		if reflect.type_info_union_is_pure_maybe(metadata) {
+			return (^rawptr)(value.data)^ == nil
+		}
+		return reflect.union_variant_typeid(value) == nil
 	case runtime.Type_Info_Any:
 		return (^any)(value.data)^ == nil
 	}
@@ -682,6 +687,20 @@ marshal_reflected_value :: proc(
 	case runtime.Type_Info_Float:
 		item, err := marshal_float_value(builder, value)
 		return Value(item), err
+	case runtime.Type_Info_Array,
+	     runtime.Type_Info_Enumerated_Array,
+	     runtime.Type_Info_Slice,
+	     runtime.Type_Info_Dynamic_Array:
+		return marshal_sequence_value(builder, value)
+	case runtime.Type_Info_Map:
+		table, err := marshal_map_table(builder, value)
+		return Value(table), err
+	case runtime.Type_Info_Pointer:
+		return marshal_pointer_value(builder, value)
+	case runtime.Type_Info_Union:
+		return marshal_union_value(builder, value)
+	case runtime.Type_Info_Any:
+		return marshal_any_value(builder, value)
 	case runtime.Type_Info_Struct:
 		table, err := marshal_struct_table(builder, value)
 		return Value(table), err

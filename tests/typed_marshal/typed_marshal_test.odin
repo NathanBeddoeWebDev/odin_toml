@@ -13,6 +13,101 @@ Named_Boolean :: distinct bool
 Named_Signed :: distinct i32
 Named_Unsigned :: distinct u32
 Named_Float :: distinct f32
+Named_Map_Key :: distinct string
+
+Sequence_Index :: enum {
+	First,
+	Second,
+}
+
+Sequence_Root :: struct {
+	fixed:         [2]i32,
+	enumerated:    [Sequence_Index]string,
+	slice:         []bool,
+	dynamic_values: [dynamic]Named_Signed,
+}
+
+Map_Field_Root :: struct {
+	values: map[Named_Map_Key]i32,
+}
+
+Wrapped_Value :: struct {
+	value: i32,
+}
+
+Optional_Wrapped_Value :: union {
+	Wrapped_Value,
+}
+
+Optional_Pointer :: union {
+	^i32,
+}
+
+Optional_Struct_Root :: union {
+	Map_Field_Root,
+}
+
+Optional_Procedure_Value :: union {
+	proc(),
+}
+
+General_Union :: union {
+	i32,
+	string,
+}
+
+Wrapper_Root :: struct {
+	pointer: ^Wrapped_Value,
+	optional: Optional_Wrapped_Value,
+	payload: any,
+}
+
+Marshal_Node :: struct {
+	value: i32,
+	next:  ^Marshal_Node `toml:",omitempty"`,
+}
+
+Alias_Root :: struct {
+	left:  ^Marshal_Node,
+	right: ^Marshal_Node,
+}
+
+Cycle_Root :: struct {
+	node: ^Marshal_Node,
+}
+
+Single_Field_Array_Range :: struct {values: [2]u128}
+Single_Field_Empty_Fixed_Unsupported :: struct {values: [0]proc()}
+Single_Field_Empty_Slice_Unsupported :: struct {values: []proc()}
+Single_Field_Empty_Dynamic_Unsupported :: struct {values: [dynamic]proc()}
+Single_Field_Empty_Map_Unsupported :: struct {values: map[string]proc()}
+Single_Field_Nil_Pointer :: struct {value: ^i32}
+Single_Field_Nil_Optional :: struct {value: Optional_Wrapped_Value}
+Single_Field_Nil_Any :: struct {value: any}
+Single_Field_Nil_Unsupported_Pointer :: struct {value: ^proc()}
+Single_Field_Nil_Unsupported_Optional :: struct {value: Optional_Procedure_Value}
+Single_Field_Nil_Pure_Maybe :: struct {value: Optional_Pointer}
+Single_Field_Nil_Dynamic :: struct {value: [dynamic]i32}
+Single_Field_Nil_Map :: struct {value: map[string]i32}
+Single_Field_General_Union :: struct {value: General_Union}
+Single_Field_Unsupported_Map_Key :: struct {value: map[i32]i32}
+Single_Field_Map_Range :: struct {value: map[string]u128}
+Single_Field_Any_Map :: struct {value: map[string]any}
+Single_Field_Any_Slice :: struct {value: []any}
+Single_Field_Empty_Slice :: struct {value: []i32}
+Single_Field_Zero_Size_Slice :: struct {value: []struct {}}
+Single_Field_Zero_Size_Dynamic :: struct {value: [dynamic]struct {}}
+Omit_Pure_Maybe :: struct {
+	value: Optional_Pointer `toml:",omitempty"`,
+	kept:  i32,
+}
+
+Composite_Container_Root :: struct {
+	sequence: [3]i32,
+	mapping:  map[string]string,
+	wrapped:  ^Wrapped_Value,
+	payload:  any,
+}
 
 Scalar_Root :: struct {
 	text:         Named_String,
@@ -113,6 +208,468 @@ Projection_Root :: struct {
 	empty: string `toml:",omitempty"`,
 	ignored: proc() `toml:"-"`,
 	last: bool `toml:"renamed"`,
+}
+
+@(test)
+test_marshal_containers_preserve_declared_sequence_order :: proc(t: ^testing.T) {
+	dynamic_values := make([dynamic]Named_Signed)
+	defer delete(dynamic_values)
+	append(&dynamic_values, 7, 8)
+	value := Sequence_Root{
+		fixed = {1, 2},
+		enumerated = {.First = "first", .Second = "second"},
+		slice = []bool{true, false},
+		dynamic_values = dynamic_values,
+	}
+	bytes, err := toml.marshal(value)
+	testing.expect(t, err == nil)
+	if err != nil {
+		return
+	}
+	defer delete(bytes)
+	testing.expect_value(t, string(bytes), `"fixed" = [1, 2]
+"enumerated" = ["first", "second"]
+"slice" = [true, false]
+"dynamic_values" = [7, 8]
+`)
+}
+
+@(test)
+test_marshal_maps_sort_converted_keys_and_support_wrapped_roots :: proc(t: ^testing.T) {
+	mapping := make(map[Named_Map_Key]i32)
+	defer delete(mapping)
+	mapping["é"] = 4
+	mapping["a"] = 3
+	mapping["A"] = 2
+	mapping["0"] = 1
+
+	bytes, err := toml.marshal(Map_Field_Root{values = mapping})
+	testing.expect(t, err == nil)
+	if err != nil {
+		return
+	}
+	defer delete(bytes)
+	testing.expect_value(t, string(bytes), `"values" = { "0" = 1, "A" = 2, "a" = 3, "é" = 4 }
+`)
+
+	root_bytes, root_error := toml.marshal(mapping)
+	testing.expect(t, root_error == nil)
+	if root_error == nil {
+		defer delete(root_bytes)
+		testing.expect_value(t, string(root_bytes), `"0" = 1
+"A" = 2
+"a" = 3
+"é" = 4
+`)
+	}
+
+	root_pointer := &mapping
+	wrapped_bytes, wrapped_error := toml.marshal(root_pointer)
+	testing.expect(t, wrapped_error == nil)
+	if wrapped_error == nil {
+		defer delete(wrapped_bytes)
+		testing.expect_value(t, string(wrapped_bytes), string(root_bytes))
+	}
+
+	optional_root: Optional_Struct_Root = Map_Field_Root{values = mapping}
+	optional_bytes, optional_error := toml.marshal(optional_root)
+	testing.expect(t, optional_error == nil)
+	if optional_error == nil {
+		defer delete(optional_bytes)
+		testing.expect_value(t, string(optional_bytes), string(bytes))
+	}
+
+	inner_root: any = Map_Field_Root{values = mapping}
+	nested_root := any{&inner_root, typeid_of(any)}
+	nested_bytes, nested_error := toml.marshal(nested_root)
+	testing.expect(t, nested_error == nil)
+	if nested_error == nil {
+		defer delete(nested_bytes)
+		testing.expect_value(t, string(nested_bytes), string(bytes))
+	}
+}
+
+@(test)
+test_marshal_wrappers_recursively_unwrap_and_nil_states_fail_explicitly :: proc(t: ^testing.T) {
+	pointed := Wrapped_Value{value = 1}
+	value := Wrapper_Root{
+		pointer = &pointed,
+		optional = Wrapped_Value{value = 2},
+		payload = [2]i32{3, 4},
+	}
+	bytes, err := toml.marshal(value)
+	testing.expect(t, err == nil)
+	if err == nil {
+		defer delete(bytes)
+		testing.expect_value(t, string(bytes), `"pointer" = { "value" = 1 }
+"optional" = { "value" = 2 }
+"payload" = [3, 4]
+`)
+	}
+
+	nil_cases := [?]struct {
+		value: any,
+		source_type: typeid,
+	}{
+		{Single_Field_Nil_Pointer{}, typeid_of(^i32)},
+		{Single_Field_Nil_Optional{}, typeid_of(Optional_Wrapped_Value)},
+		{Single_Field_Nil_Any{}, typeid_of(any)},
+		{Single_Field_Nil_Unsupported_Pointer{}, typeid_of(^proc())},
+		{Single_Field_Nil_Unsupported_Optional{}, typeid_of(Optional_Procedure_Value)},
+		{Single_Field_Nil_Pure_Maybe{}, typeid_of(Optional_Pointer)},
+	}
+	for test_case in nil_cases {
+		failed, failure := toml.marshal(test_case.value)
+		testing.expect(t, raw_data(failed) == nil)
+		data := marshal_data_kind(t, failure)
+		testing.expect_value(t, data.kind, toml.Marshal_Data_Error_Kind.Unsupported_Nil)
+		testing.expect_value(t, data.source_type, test_case.source_type)
+	}
+
+	unsupported, unsupported_error := toml.marshal(
+		Single_Field_General_Union{value = i32(1)},
+	)
+	testing.expect(t, raw_data(unsupported) == nil)
+	data := marshal_data_kind(t, unsupported_error)
+	testing.expect_value(t, data.kind, toml.Marshal_Data_Error_Kind.Unsupported_Type)
+	testing.expect_value(t, data.source_type, typeid_of(General_Union))
+}
+
+@(test)
+test_marshal_validates_empty_declared_types_and_container_initialization :: proc(t: ^testing.T) {
+	empty_dynamic := make([dynamic]proc())
+	defer delete(empty_dynamic)
+	empty_map := make(map[string]proc())
+	defer delete(empty_map)
+	unsupported_cases := [?]any{
+		Single_Field_Empty_Fixed_Unsupported{},
+		Single_Field_Empty_Slice_Unsupported{},
+		Single_Field_Empty_Dynamic_Unsupported{values = empty_dynamic},
+		Single_Field_Empty_Map_Unsupported{values = empty_map},
+	}
+	for value in unsupported_cases {
+		failed, failure := toml.marshal(value)
+		testing.expect(t, raw_data(failed) == nil)
+		data := marshal_data_kind(t, failure)
+		testing.expect_value(t, data.kind, toml.Marshal_Data_Error_Kind.Unsupported_Type)
+		testing.expect_value(t, data.source_type, typeid_of(proc()))
+	}
+
+	invalid_cases := [?]any{
+		Single_Field_Nil_Dynamic{},
+		Single_Field_Nil_Map{},
+	}
+	for value in invalid_cases {
+		failed, failure := toml.marshal(value)
+		testing.expect(t, raw_data(failed) == nil)
+		data := marshal_data_kind(t, failure)
+		testing.expect_value(t, data.kind, toml.Marshal_Data_Error_Kind.Invalid_Container)
+	}
+}
+
+@(test)
+test_marshal_reports_container_value_paths_and_active_cycles :: proc(t: ^testing.T) {
+	failed, failure := toml.marshal(Single_Field_Array_Range{values = {1, u128(max(i64))+1}})
+	testing.expect(t, raw_data(failed) == nil)
+	diagnostic, ok := failure.(toml.Marshal_Diagnostic)
+	testing.expect(t, ok)
+	if ok {
+		data, data_ok := diagnostic.detail.(toml.Marshal_Data_Error)
+		testing.expect(t, data_ok)
+		if data_ok {
+			testing.expect_value(t, data.kind, toml.Marshal_Data_Error_Kind.Integer_Out_Of_Range)
+			testing.expect_value(t, data.source_type, typeid_of(u128))
+		}
+		name, name_ok := diagnostic.path.segments[0].(string)
+		index, index_ok := diagnostic.path.segments[1].(toml.Path_Index)
+		testing.expect(t, name_ok)
+		testing.expect(t, index_ok)
+		if name_ok {
+			testing.expect_value(t, name, "values")
+		}
+		if index_ok {
+			testing.expect_value(t, index, toml.Path_Index(1))
+		}
+		testing.expect_value(t, diagnostic.path.total_segment_count, u16(2))
+	}
+
+	shared := Marshal_Node{value = 5}
+	aliases, alias_error := toml.marshal(Alias_Root{left = &shared, right = &shared})
+	testing.expect(t, alias_error == nil)
+	if alias_error == nil {
+		defer delete(aliases)
+		testing.expect_value(t, string(aliases), `"left" = { "value" = 5 }
+"right" = { "value" = 5 }
+`)
+	}
+
+	cyclic := Marshal_Node{value = 7}
+	cyclic.next = &cyclic
+	cycle_bytes, cycle_error := toml.marshal(Cycle_Root{node = &cyclic})
+	testing.expect(t, raw_data(cycle_bytes) == nil)
+	cycle_diagnostic, cycle_ok := cycle_error.(toml.Marshal_Diagnostic)
+	testing.expect(t, cycle_ok)
+	if cycle_ok {
+		data, data_ok := cycle_diagnostic.detail.(toml.Marshal_Data_Error)
+		testing.expect(t, data_ok)
+		if data_ok {
+			testing.expect_value(t, data.kind, toml.Marshal_Data_Error_Kind.Active_Recursion_Cycle)
+			testing.expect_value(t, data.source_type, typeid_of(^Marshal_Node))
+		}
+		testing.expect_value(t, cycle_diagnostic.path.total_segment_count, u16(2))
+	}
+}
+
+@(test)
+test_marshal_map_diagnostics_are_sorted_and_cycles_track_only_active_references :: proc(t: ^testing.T) {
+	unsupported_map := make(map[i32]i32)
+	defer delete(unsupported_map)
+	unsupported, unsupported_error := toml.marshal(
+		Single_Field_Unsupported_Map_Key{value = unsupported_map},
+	)
+	testing.expect(t, raw_data(unsupported) == nil)
+	data := marshal_data_kind(t, unsupported_error)
+	testing.expect_value(t, data.kind, toml.Marshal_Data_Error_Kind.Unsupported_Map_Key_Type)
+	testing.expect_value(t, data.source_type, typeid_of(i32))
+
+	ranges := make(map[string]u128)
+	defer delete(ranges)
+	ranges["z"] = u128(max(i64))+1
+	ranges["a"] = u128(max(i64))+2
+	failed, failure := toml.marshal(Single_Field_Map_Range{value = ranges})
+	testing.expect(t, raw_data(failed) == nil)
+	diagnostic, ok := failure.(toml.Marshal_Diagnostic)
+	testing.expect(t, ok)
+	if ok {
+		value_name, value_name_ok := diagnostic.path.segments[0].(string)
+		key_name, key_name_ok := diagnostic.path.segments[1].(string)
+		testing.expect(t, value_name_ok)
+		testing.expect(t, key_name_ok)
+		if value_name_ok {
+			testing.expect_value(t, value_name, "value")
+		}
+		if key_name_ok {
+			testing.expect_value(t, key_name, "a")
+		}
+	}
+
+	self_map := make(map[string]any)
+	defer delete(self_map)
+	self_map["self"] = self_map
+	cycle_bytes, cycle_error := toml.marshal(Single_Field_Any_Map{value = self_map})
+	testing.expect(t, raw_data(cycle_bytes) == nil)
+	data = marshal_data_kind(t, cycle_error)
+	testing.expect_value(t, data.kind, toml.Marshal_Data_Error_Kind.Active_Recursion_Cycle)
+	testing.expect_value(t, data.source_type, typeid_of(map[string]any))
+
+	self_slice, slice_error := make([]any, 1)
+	assert(slice_error == nil)
+	defer delete(self_slice)
+	self_slice[0] = self_slice
+	cycle_bytes, cycle_error = toml.marshal(Single_Field_Any_Slice{value = self_slice})
+	testing.expect(t, raw_data(cycle_bytes) == nil)
+	data = marshal_data_kind(t, cycle_error)
+	testing.expect_value(t, data.kind, toml.Marshal_Data_Error_Kind.Active_Recursion_Cycle)
+	testing.expect_value(t, data.source_type, typeid_of([]any))
+
+	cyclic_any: any
+	cyclic_any = any{&cyclic_any, typeid_of(any)}
+	cycle_bytes, cycle_error = toml.marshal(struct {value: any}{value = cyclic_any})
+	testing.expect(t, raw_data(cycle_bytes) == nil)
+	data = marshal_data_kind(t, cycle_error)
+	testing.expect_value(t, data.kind, toml.Marshal_Data_Error_Kind.Active_Recursion_Cycle)
+	testing.expect_value(t, data.source_type, typeid_of(any))
+
+	invalid_high := [1]byte{0xff}
+	invalid_low := [1]byte{0x80}
+	invalid_keys := make(map[string]i32)
+	defer delete(invalid_keys)
+	invalid_keys[string(invalid_high[:])] = 2
+	invalid_keys[string(invalid_low[:])] = 1
+	invalid_bytes, invalid_error := toml.marshal(
+		struct {value: map[string]i32}{value = invalid_keys},
+	)
+	testing.expect(t, raw_data(invalid_bytes) == nil)
+	invalid_diagnostic, invalid_ok := invalid_error.(toml.Marshal_Diagnostic)
+	testing.expect(t, invalid_ok)
+	if invalid_ok {
+		invalid_data, data_ok := invalid_diagnostic.detail.(toml.Marshal_Data_Error)
+		testing.expect(t, data_ok)
+		if data_ok {
+			testing.expect_value(t, invalid_data.kind, toml.Marshal_Data_Error_Kind.Invalid_Text)
+			testing.expect_value(t, invalid_data.source_type, typeid_of(string))
+		}
+		invalid_key, key_ok := invalid_diagnostic.path.segments[1].(string)
+		testing.expect(t, key_ok)
+		if key_ok {
+			testing.expect_value(t, invalid_key, string(invalid_low[:]))
+		}
+	}
+
+	nil_slice_bytes, nil_slice_error := toml.marshal(Single_Field_Empty_Slice{})
+	testing.expect(t, nil_slice_error == nil)
+	if nil_slice_error == nil {
+		defer delete(nil_slice_bytes)
+		testing.expect_value(t, string(nil_slice_bytes), `"value" = []
+`)
+	}
+
+	zero_size, zero_size_error := make([]struct {}, 2)
+	assert(zero_size_error == nil)
+	defer delete(zero_size)
+	zero_size_bytes, zero_size_marshal_error := toml.marshal(
+		Single_Field_Zero_Size_Slice{value = zero_size},
+	)
+	testing.expect(t, zero_size_marshal_error == nil)
+	if zero_size_marshal_error == nil {
+		defer delete(zero_size_bytes)
+		testing.expect_value(t, string(zero_size_bytes), `"value" = [{}, {}]
+`)
+	}
+
+	zero_dynamic := make([dynamic]struct {})
+	defer delete(zero_dynamic)
+	append(&zero_dynamic, struct {}{}, struct {}{})
+	zero_dynamic_bytes, zero_dynamic_error := toml.marshal(
+		Single_Field_Zero_Size_Dynamic{value = zero_dynamic},
+	)
+	testing.expect(t, zero_dynamic_error == nil)
+	if zero_dynamic_error == nil {
+		defer delete(zero_dynamic_bytes)
+		testing.expect_value(t, string(zero_dynamic_bytes), `"value" = [{}, {}]
+`)
+	}
+
+	overlap, overlap_error := make([]any, 2)
+	assert(overlap_error == nil)
+	defer delete(overlap)
+	overlap[0] = i32(1)
+	overlap[1] = overlap[:1]
+	overlap_bytes, overlap_marshal_error := toml.marshal(
+		Single_Field_Any_Slice{value = overlap},
+	)
+	testing.expect(t, overlap_marshal_error == nil)
+	if overlap_marshal_error == nil {
+		defer delete(overlap_bytes)
+		testing.expect_value(t, string(overlap_bytes), `"value" = [1, [1]]
+`)
+	}
+
+	wrapper_chain: [300]any
+	wrapper_chain[len(wrapper_chain)-1] = struct {}{}
+	for index := len(wrapper_chain)-2; index >= 0; index -= 1 {
+		wrapper_chain[index] = any{&wrapper_chain[index+1], typeid_of(any)}
+	}
+	chain_bytes, chain_error := toml.marshal(
+		struct {value: any}{value = wrapper_chain[0]},
+	)
+	testing.expect(t, chain_error == nil)
+	if chain_error == nil {
+		defer delete(chain_bytes)
+		testing.expect_value(t, string(chain_bytes), `"value" = {}
+`)
+	}
+}
+
+@(test)
+test_marshal_container_writer_identity_preflight_and_failed_allocation_cleanup :: proc(t: ^testing.T) {
+	mapping := make(map[string]string)
+	defer delete(mapping)
+	mapping["b"] = "second"
+	mapping["a"] = "first"
+	wrapped := Wrapped_Value{value = 9}
+	value := Composite_Container_Root{
+		sequence = {1, 2, 3},
+		mapping = mapping,
+		wrapped = &wrapped,
+		payload = []bool{true, false},
+	}
+
+	backing := context.allocator
+	success_events: [1024]test_support.Allocator_Event
+	success_live: [256]test_support.Live_Allocation
+	success: test_support.Observed_Allocator
+	test_support.observed_allocator_init(&success, backing, success_events[:], success_live[:])
+	selected := test_support.observed_allocator(&success)
+	bytes, err := toml.marshal(value, allocator = selected)
+	assert(err == nil)
+	allocation_count := success.allocation_request_count
+	testing.expect_value(t, success.live_count, 1)
+
+	options: toml.Marshal_Options
+	calls: [256]test_support.Scripted_Writer_Call
+	requested: [4096]byte
+	writer_state: test_support.Scripted_Writer
+	test_support.scripted_writer_init(&writer_state, nil, calls[:], requested[:])
+	writer_error := toml.marshal_to_writer(
+		test_support.scripted_writer(&writer_state),
+		value,
+		&options,
+		selected,
+	)
+	testing.expect(t, writer_error == nil)
+	testing.expect_value(t, string(requested[:writer_state.byte_count]), string(bytes))
+	writer_allocation_count := success.allocation_request_count-allocation_count
+	delete(bytes, selected)
+	testing.expect_value(t, success.live_count, 0)
+
+	for fail_at in 1..=allocation_count {
+		events: [1024]test_support.Allocator_Event
+		live: [256]test_support.Live_Allocation
+		state: test_support.Observed_Allocator
+		test_support.observed_allocator_init(&state, backing, events[:], live[:])
+		state.fail_at_allocation = fail_at
+		state.failure_error = .Out_Of_Memory
+		failed, failure := toml.marshal(
+			value,
+			allocator = test_support.observed_allocator(&state),
+		)
+		testing.expect(t, raw_data(failed) == nil)
+		allocator_error, ok := failure.(runtime.Allocator_Error)
+		testing.expect(t, ok)
+		if ok {
+			testing.expect_value(t, allocator_error, runtime.Allocator_Error.Out_Of_Memory)
+		}
+		testing.expect_value(t, state.live_count, 0)
+		testing.expect_value(t, state.foreign_release_count, 0)
+	}
+
+	for fail_at in 1..=writer_allocation_count {
+		events: [1024]test_support.Allocator_Event
+		live: [256]test_support.Live_Allocation
+		state: test_support.Observed_Allocator
+		test_support.observed_allocator_init(&state, backing, events[:], live[:])
+		state.fail_at_allocation = fail_at
+		state.failure_error = .Out_Of_Memory
+		test_support.scripted_writer_init(&writer_state, nil, calls[:], requested[:])
+		failure := toml.marshal_to_writer(
+			test_support.scripted_writer(&writer_state),
+			value,
+			&options,
+			test_support.observed_allocator(&state),
+		)
+		allocator_error, ok := failure.(runtime.Allocator_Error)
+		testing.expect(t, ok)
+		if ok {
+			testing.expect_value(t, allocator_error, runtime.Allocator_Error.Out_Of_Memory)
+		}
+		testing.expect_value(t, writer_state.write_count, 0)
+		testing.expect_value(t, state.live_count, 0)
+		testing.expect_value(t, state.foreign_release_count, 0)
+	}
+
+	self_map := make(map[string]any)
+	defer delete(self_map)
+	self_map["self"] = self_map
+	test_support.scripted_writer_init(&writer_state, nil, calls[:], requested[:])
+	preflight_error := toml.marshal_to_writer(
+		test_support.scripted_writer(&writer_state),
+		Single_Field_Any_Map{value = self_map},
+		&options,
+	)
+	data := marshal_data_kind(t, preflight_error)
+	testing.expect_value(t, data.kind, toml.Marshal_Data_Error_Kind.Active_Recursion_Cycle)
+	testing.expect_value(t, writer_state.write_count, 0)
 }
 
 @(test)
@@ -310,6 +867,14 @@ test_marshal_omitempty_uses_the_frozen_finite_empty_set :: proc(t: ^testing.T) {
 	defer delete(bytes)
 	testing.expect_value(t, string(bytes), `"kept" = 7
 `)
+
+	pure_maybe_bytes, pure_maybe_error := toml.marshal(Omit_Pure_Maybe{kept = 8})
+	testing.expect(t, pure_maybe_error == nil)
+	if pure_maybe_error == nil {
+		defer delete(pure_maybe_bytes)
+		testing.expect_value(t, string(pure_maybe_bytes), `"kept" = 8
+`)
+	}
 }
 
 @(test)

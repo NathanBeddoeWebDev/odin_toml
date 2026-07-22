@@ -425,6 +425,18 @@ test_lexical_and_grammar_diagnostics_remain_distinct :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_root_comment_diagnostic_does_not_reuse_previous_key_path :: proc(t: ^testing.T) {
+	doc, err := toml.parse_string("value = 1\n# bad\x01\n")
+	testing.expect(t, document_is_zero(doc))
+	diagnostic, diagnostic_ok := parse_diagnostic_from(err)
+	testing.expect(t, diagnostic_ok)
+	lexical, lexical_ok := diagnostic.detail.(toml.Parse_Lexical_Error)
+	testing.expect(t, lexical_ok)
+	testing.expect_value(t, lexical, toml.Parse_Lexical_Error.Invalid_Comment_Character)
+	testing.expect_value(t, diagnostic.path, toml.Parse_Diagnostic_Path{})
+}
+
+@(test)
 test_ordinary_diagnostic_coordinates_count_unicode_scalars_tabs_and_crlf :: proc(t: ^testing.T) {
 	input := "ok = 1\r\n\"é\"\t 1\n"
 	doc, err := toml.parse_string(input)

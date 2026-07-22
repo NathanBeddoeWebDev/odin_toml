@@ -4,6 +4,7 @@ import "core:testing"
 import test_support "../../tests/support"
 
 DECODER_ADAPTER_ARBITRARY_CASE_COUNT :: 4_096
+DECODER_ADAPTER_WRITER_CAPACITY_FIXTURE :: #load("testdata/decoder-writer-call-capacity.toml")
 
 @(test)
 test_decoder_adapter_arbitrary_input_target_is_replayable_and_leak_free :: proc(t: ^testing.T) {
@@ -30,4 +31,5 @@ test_decoder_adapter_regression_inputs_remain_deterministic :: proc(t: ^testing.
 	}
 	invalid_utf8 := [?]byte{0xc0, 0x80}
 	run_decoder_adapter_fuzz_target(t, invalid_utf8[:])
+	run_decoder_adapter_fuzz_target(t, transmute([]byte)DECODER_ADAPTER_WRITER_CAPACITY_FIXTURE)
 }

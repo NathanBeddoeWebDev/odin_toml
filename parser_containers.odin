@@ -34,8 +34,7 @@ parser_path_push :: proc(state: ^Parser_State, segment: Parse_Diagnostic_Path_Se
 
 @(private)
 parser_path_push_key :: proc(state: ^Parser_State, key: string, source: Source_Byte_Range) {
-	one := parse_path_for_key(key, source)
-	parser_path_push(state, one.segments[0])
+	parser_path_push(state, parse_path_segment_for_key(key, source))
 }
 
 @(private)
@@ -134,7 +133,7 @@ container_make_table :: proc(
 	start, end: int,
 ) -> (Table, Parse_Error) {
 	return parser_make_table(
-		state, count, start, end, parser_path_snapshot(state),
+		state, count, start, end, CURRENT_PARSE_DIAGNOSTIC_PATH,
 	)
 }
 
@@ -243,7 +242,9 @@ skip_container_trivia :: proc(
 			index += 2
 		case '#':
 			err: Parse_Error
-			index, err = validate_comment(state, index, parser_path_snapshot(state))
+			index, err = validate_comment(
+				state, index, CURRENT_PARSE_DIAGNOSTIC_PATH,
+			)
 			if err != nil {
 				return 0, err
 			}
@@ -606,7 +607,7 @@ container_simple_key_segment :: proc(
 	state: ^Parser_State,
 	start: int,
 ) -> (end: int, key_range: Source_Byte_Range, segment: Parse_Diagnostic_Path_Segment, ok: bool) {
-	path := parser_path_snapshot(state)
+	path := CURRENT_PARSE_DIAGNOSTIC_PATH
 	if start >= len(state.input) {
 		container_store_error(
 			state,
@@ -639,8 +640,8 @@ container_simple_key_segment :: proc(
 			end += 1
 		}
 		key_range = {start, end}
-		key_path := parse_path_for_key(state.input[start:end], key_range)
-		return end, key_range, key_path.segments[0], true
+		segment = parse_path_segment_for_key(state.input[start:end], key_range)
+		return end, key_range, segment, true
 	}
 
 	if start+2 < len(state.input) && state.input[start+1] == character &&
@@ -732,7 +733,7 @@ container_try_simple_key :: proc(
 	start: int,
 ) -> (string, int, Source_Byte_Range, bool) {
 	key, end, key_range, err := parse_simple_key(
-		state, start, parser_path_snapshot(state),
+		state, start, CURRENT_PARSE_DIAGNOSTIC_PATH,
 	)
 	if err != nil {
 		container_store_error(state, err)
@@ -1080,7 +1081,7 @@ parser_parse_leaf_value :: proc(
 		text: string
 		err: Parse_Error
 		text, end, err = parser_owned_text(
-			state, start, kind, parser_path_snapshot(state),
+			state, start, kind, CURRENT_PARSE_DIAGNOSTIC_PATH,
 		)
 		if err != nil {
 			container_store_error(state, err)
@@ -1094,7 +1095,7 @@ parser_parse_leaf_value :: proc(
 	}
 	err: Parse_Error
 	end, err = scan_scalar_candidate(
-		state, start, parser_path_snapshot(state), ctx,
+		state, start, CURRENT_PARSE_DIAGNOSTIC_PATH, ctx,
 	)
 	if err != nil {
 		container_store_error(state, err)
@@ -1110,7 +1111,7 @@ parser_parse_leaf_value :: proc(
 		return {}, 0, .Key_Value, false
 	}
 	value, err = parse_scalar_candidate(
-		state, start, end, parser_path_snapshot(state),
+		state, start, end, CURRENT_PARSE_DIAGNOSTIC_PATH,
 	)
 	if err != nil {
 		container_store_error(state, err)

@@ -28,6 +28,10 @@ Parser_State :: struct {
 	loc:             runtime.Source_Code_Location,
 }
 
+// This impossible public path shape defers the current-path snapshot until an error exists.
+@(private)
+CURRENT_PARSE_DIAGNOSTIC_PATH :: Parse_Diagnostic_Path{truncated = true}
+
 @(private)
 Quoted_Text_Kind :: enum u8 {
 	Basic,
@@ -88,11 +92,15 @@ parse_diagnostic :: proc(
 	path: Parse_Diagnostic_Path = {},
 	related: Optional_Source_Range = {},
 ) -> Parse_Error {
+	resolved_path := path
+	if resolved_path.truncated && resolved_path.total_segment_count == 0 {
+		resolved_path = parser_path_snapshot(state)
+	}
 	return Parse_Diagnostic{
 		detail = detail,
 		primary = source_range(state.input, start, end),
 		related = related,
-		path = path,
+		path = resolved_path,
 	}
 }
 
@@ -645,11 +653,10 @@ utf8_suffix_start :: proc(text: string, minimum: int) -> int {
 }
 
 @(private)
-parse_path_for_key :: proc(key: string, key_source: Source_Byte_Range) -> Parse_Diagnostic_Path {
-	path: Parse_Diagnostic_Path
-	path.segment_count = 1
-	path.prefix_count = 1
-	path.total_segment_count = 1
+parse_path_segment_for_key :: proc(
+	key: string,
+	key_source: Source_Byte_Range,
+) -> Parse_Diagnostic_Path_Segment {
 	key_snapshot := Parse_Diagnostic_Key{
 		decoded_byte_length = len(key),
 		source = key_source,
@@ -674,8 +681,7 @@ parse_path_for_key :: proc(key: string, key_source: Source_Byte_Range) -> Parse_
 		key_snapshot.omitted_byte_count = len(key)-prefix_length-suffix_length
 		key_snapshot.truncated = true
 	}
-	path.segments[0] = Parse_Diagnostic_Path_Segment(key_snapshot)
-	return path
+	return Parse_Diagnostic_Path_Segment(key_snapshot)
 }
 
 @(private)

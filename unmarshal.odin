@@ -494,7 +494,13 @@ unmarshal_source_for_entry :: proc(
 		}
 		if node_id != 0 {
 			node := state.parser.nodes[node_id-1]
-			return node_id, node.binding_range_id, node.key_range, node.value_range
+			key_source = source_range(
+				state.parser.input, node.key_range.start, node.key_range.end,
+			)
+			value_source = source_range(
+				state.parser.input, node.value_range.start, node.value_range.end,
+			)
+			return node_id, node.binding_range_id, key_source, value_source
 		}
 	}
 	if parent_range > 0 {
@@ -1781,6 +1787,7 @@ unmarshal_document :: proc(
 		reject_unknown_fields = options.reject_unknown_fields,
 		codecs = options.codecs,
 	}
+	state.parser.input = input
 	state.parser.root = document.root
 	state.parser.nodes = nodes
 	state.ranges = ranges

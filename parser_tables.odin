@@ -26,9 +26,9 @@ Parser_Node :: struct {
 	semantic_index:    int,
 	location:          Parser_Node_Location,
 	form:              Parse_Definition_Form,
-	definition_range:  Source_Range,
-	key_range:         Source_Range,
-	value_range:       Source_Range,
+	definition_range:  Source_Byte_Range,
+	key_range:         Source_Byte_Range,
+	value_range:       Source_Byte_Range,
 	binding_range_id:  int,
 	latest_element_id: int,
 }
@@ -141,6 +141,10 @@ parser_capture_value_range :: proc(
 	state: ^Parser_State,
 	start, end: int,
 ) -> bool {
+	if !state.capture_binding_ranges {
+		state.last_binding_range_id = 0
+		return true
+	}
 	range_id, err := parser_append_binding_range(
 		state, source_range(state.input, start, end), start, end,
 	)
@@ -166,19 +170,19 @@ parser_release_binding_ranges :: proc(state: ^Parser_State) {
 @(private)
 parser_make_nodes :: proc(
 	state: ^Parser_State,
-	count: int,
+	count, capacity: int,
 	start, end: int,
 ) -> (Parser_Node_Array, Parse_Error) {
-	if count < 0 || count > max(int)/size_of(Parser_Node) {
+	if count < 0 || capacity < count || capacity > max(int)/size_of(Parser_Node) {
 		return {}, parse_limit_error(
 			state, .Size_Overflow, start, end, parser_path_snapshot(state),
 		)
 	}
 	memory: rawptr
-	if count > 0 {
+	if capacity > 0 {
 		allocation_error: runtime.Allocator_Error
 		memory, allocation_error = allocator_allocate(
-			count*size_of(Parser_Node), state.allocator, true, state.loc,
+			capacity*size_of(Parser_Node), state.allocator, true, state.loc,
 		)
 		if allocation_error != nil {
 			return {}, allocation_error
@@ -187,7 +191,7 @@ parser_make_nodes :: proc(
 			return {}, runtime.Allocator_Error.Out_Of_Memory
 		}
 	}
-	raw := runtime.Raw_Dynamic_Array{memory, count, count, state.allocator}
+	raw := runtime.Raw_Dynamic_Array{memory, count, capacity, state.allocator}
 	return transmute(Parser_Node_Array)raw, nil
 }
 
@@ -202,17 +206,35 @@ parser_append_node :: proc(
 			state, .Size_Overflow, start, end, parser_path_snapshot(state),
 		)
 	}
-	replacement, err := parser_make_nodes(state, len(state.nodes)+1, start, end)
+	index := len(state.nodes)
+	if index < cap(state.nodes) {
+		raw := transmute(runtime.Raw_Dynamic_Array)state.nodes
+		raw.len = index+1
+		state.nodes = transmute(Parser_Node_Array)raw
+		state.nodes[index] = node
+		return len(state.nodes), nil
+	}
+	capacity := 1
+	if index > 0 {
+		if index > max(int)/2 {
+			capacity = max(int)
+		} else {
+			capacity = index*2
+		}
+	}
+	replacement, err := parser_make_nodes(
+		state, index+1, capacity, start, end,
+	)
 	if err != nil {
 		return 0, err
 	}
-	if len(state.nodes) > 0 {
+	if index > 0 {
 		mem.copy_non_overlapping(
 			raw_data(replacement), raw_data(state.nodes),
-			len(state.nodes)*size_of(Parser_Node),
+			index*size_of(Parser_Node),
 		)
 	}
-	replacement[len(state.nodes)] = node
+	replacement[index] = node
 	old := state.nodes
 	state.nodes = replacement
 	release_owned_memory(
@@ -341,7 +363,7 @@ parser_append_child :: proc(
 	key: ^string,
 	value: ^Value,
 	form: Parse_Definition_Form,
-	definition_range, key_range, value_range: Source_Range,
+	definition_range, key_range, value_range: Source_Byte_Range,
 	binding_range_id: int,
 	start, end: int,
 ) -> (int, Parse_Error) {
@@ -394,7 +416,7 @@ parser_definition_diagnostic :: proc(
 	kind: Parse_Definition_Error_Kind,
 	existing, attempted: Parse_Definition_Form,
 	primary: Source_Byte_Range,
-	related: Source_Range,
+	related: Source_Byte_Range,
 ) -> Parse_Error {
 	return parse_diagnostic(
 		state,
@@ -402,12 +424,15 @@ parser_definition_diagnostic :: proc(
 		primary.start,
 		primary.end,
 		parser_path_snapshot(state),
-		Optional_Source_Range{related, true},
+		Optional_Source_Range{
+			source_range(state.input, related.start, related.end),
+			true,
+		},
 	)
 }
 
 @(private)
-parser_node_related_range :: proc(state: ^Parser_State, node_id: int) -> Source_Range {
+parser_node_related_range :: proc(state: ^Parser_State, node_id: int) -> Source_Byte_Range {
 	node := state.nodes[node_id-1]
 	if node.form == .Array_Of_Tables && node.latest_element_id != 0 {
 		return state.nodes[node.latest_element_id-1].definition_range
@@ -434,7 +459,9 @@ parser_parse_owned_path_key :: proc(
 			parser_path_snapshot(state),
 		)
 	}
-	key, end, key_range, err = parse_simple_key(state, start, parser_path_snapshot(state))
+	key, end, key_range, err = parse_simple_key(
+		state, start, CURRENT_PARSE_DIAGNOSTIC_PATH,
+	)
 	if err != nil {
 		return "", 0, {}, err
 	}
@@ -455,7 +482,7 @@ parser_create_table_child :: proc(
 		0,
 		key_range.start,
 		key_range.end,
-		parser_path_snapshot(state),
+		CURRENT_PARSE_DIAGNOSTIC_PATH,
 	)
 	if err != nil {
 		return 0, err
@@ -465,16 +492,15 @@ parser_create_table_child :: proc(
 	defer if value_owned {
 		destroy_value_with_gate(&value, &state.gate, state.loc)
 	}
-	key_source := source_range(state.input, key_range.start, key_range.end)
 	node_id, append_error := parser_append_child(
 		state,
 		parent,
 		key,
 		&value,
 		form,
-		key_source,
-		key_source,
-		key_source,
+		key_range,
+		key_range,
+		key_range,
 		0,
 		key_range.start,
 		key_range.end,
@@ -763,16 +789,15 @@ parse_key_value_expression :: proc(state: ^Parser_State, start: int) -> (int, Pa
 		if line_error != nil {
 			return 0, line_error
 		}
-		definition_range := source_range(state.input, expression_start, value_end)
 		_, append_error := parser_append_child(
 			state,
 			current,
 			&key,
 			&value,
 			form,
-			definition_range,
-			source_range(state.input, key_range.start, key_range.end),
-			source_range(state.input, value_start, value_end),
+			Source_Byte_Range{expression_start, value_end},
+			key_range,
+			Source_Byte_Range{value_start, value_end},
 			state.last_binding_range_id,
 			expression_start,
 			value_end,
@@ -855,7 +880,11 @@ parser_append_aot_element :: proc(
 		)
 	}
 	table, table_error := parser_make_table(
-		state, 0, key_range.start, key_range.end, parser_path_snapshot(state),
+		state,
+		0,
+		key_range.start,
+		key_range.end,
+		CURRENT_PARSE_DIAGNOSTIC_PATH,
 	)
 	if table_error != nil {
 		return 0, table_error
@@ -872,7 +901,6 @@ parser_append_aot_element :: proc(
 	}
 	parser_store_node_value(state, container_id, Value(array))
 	value_owned = false
-	element_range := source_range(state.input, key_range.start, key_range.end)
 	element_id, node_error := parser_append_node(
 		state,
 		Parser_Node{
@@ -880,9 +908,9 @@ parser_append_aot_element :: proc(
 			semantic_index = prospective_index,
 			location = .Array_Element,
 			form = .Array_Of_Tables_Element,
-			definition_range = element_range,
-			key_range = element_range,
-			value_range = element_range,
+			definition_range = key_range,
+			key_range = key_range,
+			value_range = key_range,
 		},
 		key_range.start,
 		key_range.end,
@@ -914,16 +942,15 @@ parser_aot_leaf :: proc(
 		defer if value_owned {
 			destroy_value_with_gate(&value, &state.gate, state.loc)
 		}
-		key_source := source_range(state.input, key_range.start, key_range.end)
 		container_id, array_error = parser_append_child(
 			state,
 			parent,
 			key,
 			&value,
 			.Array_Of_Tables,
-			key_source,
-			key_source,
-			key_source,
+			key_range,
+			key_range,
+			key_range,
 			0,
 			key_range.start,
 			key_range.end,
@@ -1069,7 +1096,7 @@ parse_header_expression :: proc(state: ^Parser_State, start: int) -> (int, Parse
 	if line_error != nil {
 		return 0, line_error
 	}
-	header_range := source_range(state.input, start, index)
+	header_range := Source_Byte_Range{start, index}
 	state.nodes[leaf_id-1].definition_range = header_range
 	if container_id != 0 {
 		container_value, container_ok := parser_node_value(state, container_id)

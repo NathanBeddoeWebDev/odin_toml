@@ -6,6 +6,8 @@
 
 **Status:** ready-for-agent
 
+**Approved map commit clarification:** [Design review 002](../../../design-reviews/002-custom-unmarshal-map-commit-boundary.md) resolves the conflict between complete generic map-pair staging and immediate opaque callback ownership. A staged map entry remains removable until complete unless a nested custom unmarshaler succeeds; that first success commits the containing entry, which may remain recursively cleanable and partial after a later failure while the failing callback slot is exact zero.
+
 - [ ] Exact codec lookup precedes named-type, temporal, generic, and wrapper handling and remains excluded from map-key conversion.
 - [ ] The callback receives the exact clean destination slot, borrowed ranged semantic value, user data, selected allocator, and caller location.
 - [ ] Success transfers installed ownership to the application under the documented typed cleanup rules.

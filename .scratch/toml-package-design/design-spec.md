@@ -324,7 +324,7 @@ Every allocating owner-producing call takes an explicit allocator defaulting to 
 | `unmarshal*` destination installations | destination/application owns each committed allocation immediately | input never installed by alias | preflight failures unchanged; installation allocation failure may leave cleanable committed prefix | application recursively cleans with same allocator |
 | codec registry | caller owns map storage | borrowed by typed call; frozen during borrow | failed registration leaves prior entries valid | `destroy_codec_registry` |
 | custom marshaler result | package owns successful temporary `Value` until encode returns | callback source/user data borrowed | callback cleans on callback error; package cleans successful temporary on every later return | package `destroy_value` with callback allocator |
-| custom unmarshaler installation | destination owns on callback success | source `^Value` borrowed only for callback | callback error restores its entire slot to exact zero; earlier unrelated commits may remain | application codec-specific cleanup |
+| custom unmarshaler installation | destination owns on callback success; a nested map callback success commits its containing entry | source `^Value` borrowed only for callback | callback error restores its entire slot to exact zero; earlier commits, including a map entry containing an earlier opaque success, may remain | application codec-specific cleanup |
 
 A successful non-empty allocated encoder result has allocation size exactly equal to returned length. Empty success has nil backing and owns no allocation.
 
@@ -485,7 +485,7 @@ The only tag grammar is `toml:"[name][,omitempty]"` or `toml:"-"`. Empty name us
 ### Containers and wrappers
 
 - Generic map keys are only string or named/distinct string; codecs never apply to map keys.
-- Map output sorts converted keys; map unmarshal requires a nil map and commits complete key/value pairs in semantic insertion order.
+- Map output sorts converted keys; map unmarshal requires a nil map and normally commits complete key/value pairs in semantic insertion order. A successful custom unmarshaler nested in a staged value commits its containing entry immediately; design review 002 defines cleanup after a later failure.
 - Fixed/enumerated arrays require exact length. Slices and dynamic arrays install storage before elements and commit elements in order.
 - A nil slice may represent an empty array; a nil dynamic array/map is unsupported unless omitted.
 - Ordinary `^T` pointers are supported; nil marshal is an error unless omitted. Unmarshal requires nil and installs pointee storage before descendants. Zero-size pointees receive a one-byte aligned sentinel allocation.
@@ -552,7 +552,7 @@ Lookup occurs before named-type unwrapping and generic/temporal rules at each ty
 
 A custom marshaler runs exactly once per encountered node during preflight and returns a semantic `Value`, never raw TOML. It must allocate all escaping ownership with the supplied allocator, transfer only a complete valid owner on success, and return zero/no partial owner on error. TOML caches, validates, canonically emits, and always destroys successful codec values.
 
-A custom unmarshaler receives a borrowed semantic value and an exact clean destination slot. On failure it must clean all work and restore the entire supplied slot to exact zero. On success installed storage belongs to the destination and follows the application type's codec-specific cleanup contract. This issue-12 rule explicitly supersedes issue 08's earlier provisional allowance for a callback to leave its own target partially changed; only earlier, separate generic commit units may remain installed.
+A custom unmarshaler receives a borrowed semantic value and an exact clean destination slot. On failure it must clean all work and restore the entire supplied slot to exact zero. On success installed storage belongs to the destination and follows the application type's codec-specific cleanup contract. This issue-12 rule explicitly supersedes issue 08's earlier provisional allowance for a callback to leave its own target partially changed; only earlier, separate commit units may remain installed. For a callback nested in a map value, its first opaque success commits the containing preallocated entry because the package cannot roll that ownership back; a later failure may leave the entry recursively cleanable and partial while the failing callback slot remains zero, as resolved by [design review 002](../../design-reviews/002-custom-unmarshal-map-commit-boundary.md).
 
 Callbacks cannot retain borrows, mutate marshal sources/semantic inputs, call active typed TOML operations recursively, or access parser/writer state. Callback-defined failure codes are nonzero and wrapped with package path/type/range; callback allocator errors propagate as exact allocator errors.
 

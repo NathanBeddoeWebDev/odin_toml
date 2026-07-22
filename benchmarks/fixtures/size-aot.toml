@@ -1,0 +1,16 @@
+name = "cluster"
+
+[[nodes]]
+id = 1
+host = "alpha.example"
+tags = ["edge", "blue"]
+
+[[nodes]]
+id = 2
+host = "beta.example"
+tags = ["core", "green"]
+
+[[nodes]]
+id = 3
+host = "gamma.example"
+tags = ["edge", "green"]

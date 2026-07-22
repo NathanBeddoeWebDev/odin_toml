@@ -158,20 +158,35 @@ target_runs=(
   "$typed_runs" "$decoder_runs" "$encoder_runs"
 )
 
-python3 - "$target" "$elapsed" "${target_names[@]}" "${target_runs[@]}" <<'PY'
+mkdir -p build/reports
+campaign_log=build/reports/sanitizer-fuzz.log
+: >"$campaign_log"
+for name in semantic typed decoder encoder; do
+  printf '===== %s =====\n' "$name" >>"$campaign_log"
+  cat "$work/$name.log" >>"$campaign_log"
+done
+source_revision=${GITHUB_SHA:-$(git rev-parse HEAD)}
+run_id=${GITHUB_RUN_ID:-local}
+
+python3 - "$target" "$elapsed" "$source_revision" "$run_id" "$campaign_log" "${target_names[@]}" "${target_runs[@]}" <<'PY'
+import hashlib
 import json
 import platform
 import subprocess
 import sys
 from pathlib import Path
 
-target, elapsed, *values = sys.argv[1:]
+target, elapsed, source_revision, run_id, log_name, *values = sys.argv[1:]
 names = values[:8]
 runs = [int(value) for value in values[8:]]
 machine = platform.machine().lower()
 machine = {"x86_64": "amd64", "aarch64": "arm64"}.get(machine, machine)
+log_path = Path(log_name)
+log_bytes = log_path.read_bytes()
 report = {
     "compiler": subprocess.check_output(["odin", "version"], text=True).strip(),
+    "source_revision": source_revision,
+    "ci_run_id": run_id,
     "platform": f"{platform.system().lower()}_{machine}",
     "target": target,
     "mode": "minimal",
@@ -179,6 +194,11 @@ report = {
     "fuzz_engine": "libFuzzer coverage-guided",
     "aggregate_duration_seconds": int(elapsed),
     "targets": dict(zip(names, runs, strict=True)),
+    "campaign_log": {
+        "file": log_path.name,
+        "bytes": len(log_bytes),
+        "sha256": hashlib.sha256(log_bytes).hexdigest(),
+    },
     "skips": 0,
     "expected_failures": 0,
     "sanitizer_findings": 0,

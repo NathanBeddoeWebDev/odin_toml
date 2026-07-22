@@ -75,7 +75,7 @@ jobs:
         run: scripts/prepare_test_dependencies.sh
       - name: Run complete normal and speed public suite
         shell: bash
-        run: scripts/check.sh
+        run: scripts/run_public_suite.sh
       - name: Run AddressSanitizer aggregate fuzz campaign
         shell: bash
         run: scripts/run_sanitizer_fuzz.sh --target "${{ matrix.target }}" --duration 300
@@ -85,7 +85,7 @@ jobs:
         with:
           name: reports-${{ matrix.target }}
           path: build/reports/
-          if-no-files-found: warn
+          if-no-files-found: error
 
   thread-sanitizer:
     runs-on: ubuntu-24.04
@@ -110,5 +110,29 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: reports-linux-amd64-thread-sanitizer
-          path: build/reports/thread-sanitizer.json
-          if-no-files-found: warn
+          path: build/reports/thread-sanitizer.*
+          if-no-files-found: error
+
+  release-evidence:
+    needs: [declarations, platform-matrix, thread-sanitizer]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Download native platform and sanitizer reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: reports-*
+          path: build/release-reports
+      - name: Assemble reviewed release bundle
+        run: |
+          scripts/assemble_release_bundle.py assemble \
+            --reports-root build/release-reports \
+            --output build/release-bundle \
+            --source-revision "$GITHUB_SHA" \
+            --run-id "$GITHUB_RUN_ID"
+      - name: Upload reviewed release bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-bundle
+          path: build/release-bundle/
+          if-no-files-found: error

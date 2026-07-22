@@ -1,0 +1,51 @@
+{
+  "compiler": "odin version dev-2026-07:2c25fb924",
+  "compiler_revision": "2c25fb92420bfa31da62e2194b0cc2cb8bd54cf8",
+  "kind": "inline-canonical-size-observations",
+  "policy": "Recorded encoded sizes only; no thresholds or pass/fail comparisons.",
+  "profile": "all-inline canonical TOML",
+  "release_gating": false,
+  "reproduce": [
+    "odin",
+    "build",
+    "benchmarks",
+    "-o:speed",
+    "-vet",
+    "-vet-style",
+    "-warnings-as-errors",
+    "-out:<temporary>/benchmarks",
+    "&&",
+    "<temporary>/benchmarks",
+    "encoded-size"
+  ],
+  "results": [
+    {
+      "canonical_bytes": 159,
+      "canonical_fnv1a64": 9361441461251087465,
+      "expansion_ratio": 1.0671140939597314,
+      "fixture": "benchmarks/fixtures/size-nested.toml",
+      "fixture_sha256": "6edf0541db1251c034f346a4ea128bb86831b5e8c6ee07dfd3b1cb0ca9ebf23d",
+      "name": "nested-tables",
+      "source_bytes": 149
+    },
+    {
+      "canonical_bytes": 232,
+      "canonical_fnv1a64": 2414273592662462690,
+      "expansion_ratio": 1.0892018779342723,
+      "fixture": "benchmarks/fixtures/size-aot.toml",
+      "fixture_sha256": "485041bf2bdbd8e3f73e92f82f12949ad3abfea7ef76ab68db99bca754c80f27",
+      "name": "arrays-of-tables",
+      "source_bytes": 213
+    },
+    {
+      "canonical_bytes": 180,
+      "canonical_fnv1a64": 59963406373613016,
+      "expansion_ratio": 1.125,
+      "fixture": "benchmarks/fixtures/size-mixed.toml",
+      "fixture_sha256": "9fec6213de5c144fbbd8814bc2794d1321cdf55850d3fb63c087d25cd3af20da",
+      "name": "mixed-values",
+      "source_bytes": 160
+    }
+  ],
+  "schema": 1
+}

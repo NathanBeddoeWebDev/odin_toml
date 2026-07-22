@@ -1,0 +1,140 @@
+{
+  "compiler": "odin version dev-2026-07:2c25fb924",
+  "compiler_revision": "2c25fb92420bfa31da62e2194b0cc2cb8bd54cf8",
+  "host": {
+    "architecture": "arm64",
+    "platform": "darwin",
+    "processor": "arm",
+    "python": "3.14.6"
+  },
+  "kind": "performance-observations",
+  "methodology": {
+    "build_mode": "speed",
+    "cleanup": "each operation releases every public-API owner it creates",
+    "samples_per_category": 5,
+    "timing": "monotonic elapsed nanoseconds",
+    "warmups_per_category": 1
+  },
+  "policy": "Recorded observations only; no thresholds or pass/fail comparisons.",
+  "release_gating": false,
+  "reproduce": [
+    "odin",
+    "build",
+    "benchmarks",
+    "-o:speed",
+    "-vet",
+    "-vet-style",
+    "-warnings-as-errors",
+    "-out:<temporary>/benchmarks",
+    "&&",
+    "<temporary>/benchmarks",
+    "performance"
+  ],
+  "results": [
+    {
+      "checksum": 2700,
+      "elapsed_ns_samples": [
+        13811458,
+        12902917,
+        13051084,
+        12965084,
+        12939375
+      ],
+      "median_ns_per_operation": 43216.94666666666,
+      "name": "parse",
+      "operations_per_sample": 300
+    },
+    {
+      "checksum": 16990335059081782304,
+      "elapsed_ns_samples": [
+        3047125,
+        3079666,
+        3115125,
+        3066083,
+        3085375
+      ],
+      "median_ns_per_operation": 10265.553333333333,
+      "name": "semantic-encode",
+      "operations_per_sample": 300
+    },
+    {
+      "checksum": 11599215714273934636,
+      "elapsed_ns_samples": [
+        1217792,
+        1206917,
+        1210959,
+        1197958,
+        1207166
+      ],
+      "median_ns_per_operation": 4828.664,
+      "name": "typed-marshal",
+      "operations_per_sample": 250
+    },
+    {
+      "checksum": 3250,
+      "elapsed_ns_samples": [
+        4556042,
+        4569166,
+        4735625,
+        4540625,
+        4522292
+      ],
+      "median_ns_per_operation": 18224.168,
+      "name": "typed-unmarshal",
+      "operations_per_sample": 250
+    },
+    {
+      "checksum": 25500000,
+      "elapsed_ns_samples": [
+        18114000,
+        18047334,
+        18771833,
+        18643083,
+        18396375
+      ],
+      "median_ns_per_operation": 183.96375,
+      "name": "ordered-table",
+      "operations_per_sample": 100000
+    },
+    {
+      "checksum": 50,
+      "elapsed_ns_samples": [
+        8873708,
+        8829250,
+        8853833,
+        8995292,
+        8938417
+      ],
+      "median_ns_per_operation": 177474.16,
+      "name": "depth",
+      "operations_per_sample": 50
+    },
+    {
+      "checksum": 16343774315222433240,
+      "elapsed_ns_samples": [
+        26918541,
+        26869375,
+        26967500,
+        26941833,
+        26637417
+      ],
+      "median_ns_per_operation": 269185.41,
+      "name": "map-sort",
+      "operations_per_sample": 100
+    },
+    {
+      "checksum": 19150,
+      "elapsed_ns_samples": [
+        11941083,
+        12064125,
+        11861666,
+        11939459,
+        11883875
+      ],
+      "median_ns_per_operation": 238789.18,
+      "name": "codec-heavy",
+      "operations_per_sample": 50
+    }
+  ],
+  "schema": 1
+}

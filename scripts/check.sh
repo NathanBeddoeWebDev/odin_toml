@@ -19,6 +19,8 @@ mkdir -p build/reports
 
 scripts/check_public_api.py
 scripts/check_diagnostic_ledger.py
+python3 -m unittest discover -s tests/release_bundle -p 'test_*.py'
+scripts/assemble_release_bundle.py check-tracked
 
 common=(-vet -vet-style -warnings-as-errors)
 odin check . -no-entry-point "${common[@]}"
@@ -125,15 +127,13 @@ for zone in UTC Pacific/Kiritimati America/Los_Angeles; do
     -define:ODIN_TEST_FAIL_ON_BAD_MEMORY=true
 done
 
+scripts/check_documentation.sh
+
 work=$(mktemp -d "${TMPDIR:-/tmp}/odin-toml-check.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 for mode in minimal speed; do
   odin build tests/consumer_semantic "-o:$mode" "${common[@]}" -out:"$work/semantic-$mode"
   odin build tests/consumer_typed "-o:$mode" "${common[@]}" -out:"$work/typed-$mode"
-  odin build examples/semantic_lifecycle "-o:$mode" "${common[@]}" -out:"$work/semantic-lifecycle-$mode"
-  "$work/semantic-lifecycle-$mode"
-  odin build examples/typed_unmarshal_cleanup "-o:$mode" "${common[@]}" -out:"$work/typed-unmarshal-cleanup-$mode"
-  "$work/typed-unmarshal-cleanup-$mode"
 
   odin build tests/semantic_fuzz "-o:$mode" "${common[@]}" -out:"$work/semantic-fuzz-$mode"
   printf 'value = [1, 2, 3]\n' | "$work/semantic-fuzz-$mode" strict-parse
@@ -151,17 +151,5 @@ for mode in minimal speed; do
 done
 
 scripts/probe_rtti.sh
-
-if [[ -n ${MATRIX_TARGET:-} ]]; then
-  matrix_target=$MATRIX_TARGET
-else
-  matrix_target=$(python3 -c '
-import platform
-machine = platform.machine().lower()
-machine = {"x86_64": "amd64", "aarch64": "arm64"}.get(machine, machine)
-print(f"{platform.system().lower()}_{machine}")
-')
-fi
-scripts/write_public_suite_report.py --target "$matrix_target"
 
 printf 'all normal and optimized scaffold checks and feasibility probes passed\n'

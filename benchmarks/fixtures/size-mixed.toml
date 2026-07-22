@@ -1,0 +1,8 @@
+string = "text"
+integer = -42
+float = 6.25
+boolean = true
+date = 2026-07-22
+time = 12:34:56.789
+array = [1, 2, 3, 4]
+inline = { first = "one", second = "two" }

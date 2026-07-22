@@ -2,7 +2,7 @@
 
 Standalone Odin packages for strict TOML 1.1 documents and allocation-free temporal values.
 
-This repository is being implemented in dependency-ordered tickets. Public declarations are frozen; procedures whose implementation tickets have not landed yet intentionally call `unimplemented` if executed.
+The package accepts no permissive, recovery, legacy, or extension mode. Public declarations, ownership behavior, canonical bytes, and diagnostics are frozen against the pinned Reference Odin compiler.
 
 ## Packages
 
@@ -10,6 +10,14 @@ This repository is being implemented in dependency-ordered tickets. Public decla
 - [`temporal/`](temporal): package `temporal`
 
 `toml` imports `temporal`; `temporal` does not import `toml`. External consumers can use a relative import or map the repository into an Odin collection.
+
+## Consumer contract
+
+- [`docs/consumer-guide.md`](docs/consumer-guide.md) defines parse/clone ownership, borrow invalidation, mutation, allocated/writer output, typed cleanup, allocator lifetime modes, and codec registry concurrency.
+- [`docs/compatibility.md`](docs/compatibility.md) defines strictness, package-wide normal RTTI, the supported compiler/target/mode matrix, SemVer policy, and non-goals.
+- [`examples/consumer_contract`](examples/consumer_contract/main.odin) executes mutation, canonical allocated/writer identity, typed marshal/unmarshal, directionally paired codecs, and zero-owner error results.
+- [`examples/semantic_lifecycle`](examples/semantic_lifecycle/main.odin) executes parse, borrowed lookup, clone, and destruction.
+- [`examples/typed_unmarshal_cleanup`](examples/typed_unmarshal_cleanup/main.odin) executes complete and partial typed cleanup with individually freeing and external-lifetime allocators.
 
 ## Semantic ownership
 
@@ -22,7 +30,7 @@ Successful parse and clone calls return owners. `get` returns only a borrowed po
 - Both destroy operations zero the supplied owner and are idempotent.
 - With an external-lifetime allocator, destruction ends logical ownership; reclaim physical storage through that allocator's lifetime.
 
-The executable [`examples/semantic_lifecycle`](examples/semantic_lifecycle/main.odin) demonstrates an initialized empty document and the difference between a borrowed `get` result and an owned deep clone.
+The executable [`examples/semantic_lifecycle`](examples/semantic_lifecycle/main.odin) demonstrates an initialized empty document and the difference between a borrowed `get` result and an owned deep clone. [`examples/consumer_contract`](examples/consumer_contract/main.odin) additionally executes structural mutation and both canonical output forms.
 
 ## Codec registry lifecycle
 
@@ -48,15 +56,30 @@ The executable [`examples/typed_unmarshal_cleanup`](examples/typed_unmarshal_cle
 
 ## Reproducible checks
 
-The supported compiler is pinned in [`toolchain/odin.lock`](toolchain/odin.lock). With that compiler on `PATH`:
+The supported compiler is pinned in [`toolchain/odin.lock`](toolchain/odin.lock). From a clean checkout with that compiler on `PATH`:
 
 ```sh
+scripts/prepare_test_dependencies.sh
+scripts/check_documentation.sh
 scripts/check.sh
 ```
 
-The command captures `odin version` and `odin report` in `build/reports/compiler.txt`, checks the frozen generated API snapshots, rejects runtime oracle dependencies, and compiles both external consumers in normal and `-o:speed` modes.
+The documentation check compiles and executes every public example in normal (`-o:minimal`) and optimized (`-o:speed`) modes. The complete check captures `odin version` and `odin report` in `build/reports/compiler.txt`, checks the frozen generated API snapshots and tracked release manifest, rejects runtime oracle dependencies, runs the complete correctness suite, and compiles both external consumers. CI runs the suite natively on Linux amd64/arm64, macOS amd64/arm64, and Windows amd64; the exact sanitizer scope and compatibility policy are documented in [`docs/compatibility.md`](docs/compatibility.md).
 
 The complete `toml` package requires normal RTTI because its frozen typed-binding declarations use `any`. `ODIN_NO_RTTI` builds are unsupported, including semantic-only consumers. [`design-reviews/001-reference-odin-no-rtti.md`](design-reviews/001-reference-odin-no-rtti.md) records the pinned-compiler evidence and approved resolution; `scripts/probe_no_rtti.sh` remains only as a historical reproducer.
+
+## Baselines and release evidence
+
+Reproduce the eight public-API benchmark categories and inline canonical encoded-size observations with:
+
+```sh
+scripts/record_benchmarks.py performance --output /tmp/odin-toml-performance.json
+scripts/record_benchmarks.py encoded-size --output /tmp/odin-toml-inline-sizes.json
+```
+
+The commands and committed results are documented in [`benchmarks/README.md`](benchmarks/README.md). They are observations only: no duration or size is a release threshold.
+
+[`release/manifest.json`](release/manifest.json) binds every compiler/dependency pin, conformance report, deterministic seed, allocator/writer sweep, platform/mode job, and sanitizer/race artifact. [`release/README.md`](release/README.md) documents clean-checkout reproduction and the fail-closed CI assembly of the SHA-256-indexed `release-bundle`; unresolved skips, expected failures, sanitizer/race/memory findings, and minimized fuzz defects are rejected.
 
 ## Test-only dependency pins
 

@@ -1,0 +1,12 @@
+title = "nested"
+
+[service]
+name = "api"
+
+[service.http]
+host = "127.0.0.1"
+port = 8080
+
+[service.http.tls]
+enabled = true
+versions = ["1.2", "1.3"]

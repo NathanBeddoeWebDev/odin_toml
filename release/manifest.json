@@ -1,0 +1,206 @@
+{
+  "schema": 1,
+  "compiler": {
+    "lock": "toolchain/odin.lock",
+    "source": "https://github.com/odin-lang/Odin.git",
+    "revision": "2c25fb92420bfa31da62e2194b0cc2cb8bd54cf8",
+    "version": "dev-2026-07:2c25fb924"
+  },
+  "dependencies": {
+    "toml_test": {
+      "lock": "tests/corpus/toml-test.lock",
+      "source": "https://github.com/toml-lang/toml-test.git",
+      "tag": "v2.2.0",
+      "revision": "ce08da1ddb075d1c7596d663c7fcba9a2ae02c5c",
+      "toml_version": "1.1.0"
+    },
+    "float_oracle": {
+      "lock": "tests/oracle/ryu.lock",
+      "source": "https://github.com/ulfjack/ryu.git",
+      "revision": "4c0618b0e44f7ef027ebae05d2cc7812048f7c8f"
+    }
+  },
+  "conformance": [
+    {
+      "kind": "decoder",
+      "report": "tests/corpus/toml-test-decoder-report.json",
+      "passed_valid": 214,
+      "passed_invalid": 467,
+      "passed_encoder": 0
+    },
+    {
+      "kind": "encoder",
+      "report": "tests/corpus/toml-test-encoder-report.json",
+      "passed_valid": 214,
+      "passed_invalid": 467,
+      "passed_encoder": 214
+    }
+  ],
+  "generated_testing": {
+    "seed": 123456789,
+    "property_suites": [
+      "tests/semantic_properties",
+      "tests/typed_fuzz"
+    ],
+    "fuzz_targets": [
+      "strict-parse",
+      "valid-utf8",
+      "parse-unparse",
+      "semantic-lifecycle",
+      "writer-validation",
+      "typed-codec",
+      "decoder-adapter",
+      "encoder-adapter"
+    ],
+    "minimized_defect_count": 0
+  },
+  "acceptance_gates": [
+    "strict-cross-target-typecheck",
+    "official-conformance",
+    "focused-parser-temporal",
+    "diagnostics",
+    "semantic-lifecycle",
+    "exact-canonical-encoder",
+    "semantic-typed-properties",
+    "reflection-codecs",
+    "allocator-sweeps",
+    "writer-sweeps",
+    "deterministic-fuzz-replay",
+    "external-consumers-documentation"
+  ],
+  "acceptance_gate_sources": {
+    "strict-cross-target-typecheck": ["scripts/check.sh", "api/toml.public-api", "api/temporal.public-api"],
+    "official-conformance": ["scripts/check_toml_test_decoder.sh", "scripts/check_toml_test_encoder.sh", "tests/corpus/toml-test-decoder-report.json", "tests/corpus/toml-test-encoder-report.json"],
+    "focused-parser-temporal": ["tests/scalar_parse", "tests/container_parse", "tests/table_parse", "tests/temporal"],
+    "diagnostics": ["tests/diagnostic_acceptance", "tests/diagnostic_acceptance/diagnostic-ledger.json"],
+    "semantic-lifecycle": ["tests/semantic_lifecycle", "tests/semantic_mutation"],
+    "exact-canonical-encoder": ["tests/semantic_unparse", "scripts/check_float_format_oracle.sh"],
+    "semantic-typed-properties": ["tests/semantic_properties", "tests/typed_fuzz"],
+    "reflection-codecs": ["tests/typed_marshal", "tests/typed_unmarshal", "tests/codec_registry"],
+    "allocator-sweeps": ["tests/allocator_gate", "tests/typed_fuzz"],
+    "writer-sweeps": ["tests/semantic_unparse", "tests/semantic_fuzz", "tests/typed_fuzz"],
+    "deterministic-fuzz-replay": ["tests/semantic_fuzz", "tests/typed_fuzz", "cmd/toml_test_decoder", "cmd/toml_test_encoder"],
+    "external-consumers-documentation": ["tests/consumer_semantic", "tests/consumer_typed", "scripts/check_documentation.sh", "examples"]
+  },
+  "sweeps": {
+    "allocator": {
+      "policy": "fail at every observed allocating ordinal and verify exact cleanup",
+      "suites": [
+        "tests/allocator_gate",
+        "tests/semantic_lifecycle",
+        "tests/semantic_mutation",
+        "tests/semantic_unparse",
+        "tests/typed_marshal",
+        "tests/typed_unmarshal",
+        "tests/typed_fuzz"
+      ]
+    },
+    "writer": {
+      "policy": "exercise every write ordinal with count/error combinations, exact prefixes, and no retries",
+      "suites": [
+        "tests/semantic_unparse",
+        "tests/semantic_fuzz",
+        "tests/typed_marshal",
+        "tests/typed_fuzz"
+      ]
+    }
+  },
+  "support": {
+    "targets": [
+      "linux_amd64",
+      "linux_arm64",
+      "darwin_amd64",
+      "darwin_arm64",
+      "windows_amd64"
+    ],
+    "modes": [
+      "minimal",
+      "speed"
+    ],
+    "strict": {
+      "vet": true,
+      "vet_style": true,
+      "warnings_as_errors": true
+    },
+    "bad_memory_failure": true
+  },
+  "sanitizers": {
+    "address": {
+      "targets": [
+        "linux_amd64",
+        "linux_arm64",
+        "darwin_amd64",
+        "darwin_arm64",
+        "windows_amd64"
+      ],
+      "aggregate_duration_seconds_minimum": 300,
+      "fuzz_engine": "libFuzzer coverage-guided"
+    },
+    "thread": {
+      "target": "linux_amd64",
+      "test": "frozen-registry-concurrent-reads"
+    }
+  },
+  "zero_tolerance_counters": [
+    "skips",
+    "expected_failures",
+    "sanitizer_findings",
+    "race_findings",
+    "memory_reports",
+    "unresolved_minimized_defects"
+  ],
+  "baselines": {
+    "performance": "benchmarks/baselines/performance-darwin-arm64.json",
+    "encoded_size": "benchmarks/baselines/inline-canonical-sizes.json",
+    "release_gating": false
+  },
+  "reproduction": {
+    "prepare_dependencies": "scripts/prepare_test_dependencies.sh",
+    "documentation": "scripts/check_documentation.sh",
+    "correctness": "scripts/check.sh",
+    "performance": "scripts/record_benchmarks.py performance --output <path>",
+    "encoded_size": "scripts/record_benchmarks.py encoded-size --output <path>"
+  },
+  "ci_evidence": {
+    "workflow": ".github/workflows/scaffold.yml",
+    "platform_artifact_prefix": "reports-",
+    "thread_artifact": "reports-linux-amd64-thread-sanitizer",
+    "bundle_artifact": "release-bundle"
+  },
+  "tracked_bundle_files": [
+    "release/manifest.json",
+    "release/README.md",
+    "README.md",
+    "docs/consumer-guide.md",
+    "docs/compatibility.md",
+    "examples/semantic_lifecycle/main.odin",
+    "examples/typed_unmarshal_cleanup/main.odin",
+    "examples/consumer_contract/main.odin",
+    "benchmarks/README.md",
+    "benchmarks/main.odin",
+    "benchmarks/fixtures/parse-mixed.toml",
+    "benchmarks/fixtures/size-nested.toml",
+    "benchmarks/fixtures/size-aot.toml",
+    "benchmarks/fixtures/size-mixed.toml",
+    "benchmarks/baselines/performance-darwin-arm64.json",
+    "benchmarks/baselines/inline-canonical-sizes.json",
+    "toolchain/odin.lock",
+    "tests/corpus/toml-test.lock",
+    "tests/oracle/ryu.lock",
+    "tests/corpus/toml-test-decoder-report.json",
+    "tests/corpus/toml-test-encoder-report.json",
+    "tests/diagnostic_acceptance/diagnostic-ledger.json",
+    "api/toml.public-api",
+    "api/temporal.public-api",
+    "tests/release_bundle/test_assemble_release_bundle.py",
+    "scripts/check.sh",
+    "scripts/run_public_suite.sh",
+    "scripts/check_documentation.sh",
+    "scripts/record_benchmarks.py",
+    "scripts/assemble_release_bundle.py",
+    "scripts/write_public_suite_report.py",
+    "scripts/run_sanitizer_fuzz.sh",
+    "scripts/check_thread_sanitizer.sh",
+    ".github/workflows/scaffold.yml"
+  ]
+}

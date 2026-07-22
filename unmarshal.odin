@@ -10,6 +10,8 @@ Unmarshal_State :: struct {
 	loc:       runtime.Source_Code_Location,
 	max_depth: int,
 	reject_unknown_fields: bool,
+	codecs:    ^Codec_Registry,
+	opaque_commit_count: uint,
 	parser:    Parser_State,
 	ranges:    Binding_Range_Node_Array,
 	builder:   Marshal_Builder,
@@ -286,6 +288,9 @@ unmarshal_validate_declared_type :: proc(
 	destination_type: typeid,
 	source: Optional_Source_Range,
 ) -> Unmarshal_Error {
+	if unmarshal_codec_registered(state, destination_type) {
+		return nil
+	}
 	if marshal_is_temporal_type(destination_type) {
 		return nil
 	}
@@ -549,6 +554,14 @@ unmarshal_preflight_value :: proc(
 ) -> Unmarshal_Error {
 	kind := unmarshal_value_kind(source)
 	optional_source := unmarshal_source(source_range)
+	if unmarshal_codec_registered(state, destination.id) {
+		if !implicit_zero && !unmarshal_slot_is_exact_zero(destination) {
+			return unmarshal_diagnostic(
+				state, .Nonzero_Destination_Ownership, destination.id, kind, optional_source,
+			)
+		}
+		return nil
+	}
 	if destination.id == typeid_of(temporal.Offset_Date_Time) {
 		if _, ok := source.(temporal.Offset_Date_Time); !ok {
 			return unmarshal_diagnostic(
@@ -1307,17 +1320,85 @@ unmarshal_assign_sequence :: proc(
 	data: rawptr,
 	element_type: typeid,
 	element_size: int,
+	parent_node, parent_range: int,
+	fallback_source: Source_Range,
 ) -> Unmarshal_Error {
 	for child, index in source {
+		child_node_id, child_range_id, _, child_source := unmarshal_source_for_entry(
+			state, parent_node, parent_range, index, fallback_source,
+		)
+		if path_error := unmarshal_push_path(
+			state,
+			Path_Index(index),
+			child_source,
+			element_type,
+			unmarshal_value_kind(child),
+		); path_error != nil {
+			return path_error
+		}
 		element_data := rawptr(uintptr(data)+uintptr(index*element_size))
 		if element_size == 0 {element_data = rawptr(state)}
-		if err := unmarshal_assign_value(
-			state, child, any{element_data, element_type},
-		); err != nil {
+		err := unmarshal_assign_value(
+			state,
+			child,
+			any{element_data, element_type},
+			child_node_id,
+			child_range_id,
+			unmarshal_source(child_source),
+		)
+		unmarshal_pop_path(state)
+		if err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+@(private)
+unmarshal_remove_map_entry :: proc(
+	state: ^Unmarshal_State,
+	raw_map: ^runtime.Raw_Map,
+	metadata: runtime.Type_Info_Map,
+	key: string,
+	cleanup_value: bool,
+) {
+	lookup := transmute(runtime.Raw_String)key
+	old_key_address, old_value_address, found := runtime.map_erase_dynamic(
+		raw_map, metadata.map_info, uintptr(&lookup),
+	)
+	assert(found)
+	old_key := (^runtime.Raw_String)(rawptr(old_key_address))
+	old_value := any{rawptr(old_value_address), metadata.value.id}
+	if cleanup_value {
+		unmarshal_cleanup_value(state, old_value)
+	} else {
+		assert(unmarshal_slot_is_exact_zero(old_value))
+	}
+	release_owned_memory(
+		&state.builder.gate, rawptr(old_key.data), old_key.len, state.loc,
+	)
+	old_key^ = {}
+	unmarshal_zero_slot(old_value)
+}
+
+@(private)
+unmarshal_remove_map_entries :: proc(
+	state: ^Unmarshal_State,
+	source: Table,
+	raw_map: ^runtime.Raw_Map,
+	metadata: runtime.Type_Info_Map,
+	first, end: int,
+	cleanup_first: bool = false,
+) {
+	for index in first..<end {
+		unmarshal_remove_map_entry(
+			state,
+			raw_map,
+			metadata,
+			source[index].key,
+			cleanup_first && index == first,
+		)
+	}
 }
 
 @(private)
@@ -1326,77 +1407,122 @@ unmarshal_assign_map :: proc(
 	source: Table,
 	destination: any,
 	metadata: runtime.Type_Info_Map,
+	parent_node, parent_range: int,
+	fallback_source: Source_Range,
 ) -> Unmarshal_Error {
 	raw_map := (^runtime.Raw_Map)(destination.data)
 	if len(source) == 0 {
 		raw_map.allocator = state.allocator
-	} else {
-		_, log2_capacity, capacity_ok := unmarshal_map_capacity(len(source))
-		assert(capacity_ok)
-		initialized, allocation_error := runtime.map_alloc_dynamic(
-			metadata.map_info, log2_capacity, state.allocator, state.loc,
-		)
-		if allocation_error != nil {
-			return allocation_error
-		}
-		if initialized.data == 0 {
-			return runtime.Allocator_Error.Out_Of_Memory
-		}
-		raw_map^ = initialized
+		return nil
 	}
+
+	_, log2_capacity, capacity_ok := unmarshal_map_capacity(len(source))
+	assert(capacity_ok)
+	initialized, allocation_error := runtime.map_alloc_dynamic(
+		metadata.map_info, log2_capacity, state.allocator, state.loc,
+	)
+	if allocation_error != nil {
+		return allocation_error
+	}
+	if initialized.data == 0 {
+		return runtime.Allocator_Error.Out_Of_Memory
+	}
+	raw_map^ = initialized
+
 	value_info := reflect.type_info_base(type_info_of(metadata.value.id))
+	zero_memory, zero_error := unmarshal_install_storage(
+		state, value_info.size, value_info.align,
+	)
+	if zero_error != nil {
+		return zero_error
+	}
+	zero_data := zero_memory
+	if zero_data == nil {zero_data = rawptr(state)}
+	staged_count := 0
 	for entry in source {
 		owned_key, key_error := clone_owned_string(entry.key, state.allocator, state.loc)
 		if key_error != nil {
+			unmarshal_remove_map_entries(
+				state, source, raw_map, metadata, 0, staged_count,
+			)
+			release_owned_memory(
+				&state.builder.gate, zero_memory, value_info.size, state.loc,
+			)
 			return key_error.(runtime.Allocator_Error)
 		}
 		key_raw := transmute(runtime.Raw_String)owned_key
-		value_memory, storage_error := unmarshal_install_storage(
-			state, value_info.size, value_info.align,
-		)
-		if storage_error != nil {
-			release_owned_memory(
-				&state.builder.gate, raw_data(owned_key), len(owned_key), state.loc,
-			)
-			return storage_error
-		}
-		value_data := value_memory
-		if value_data == nil {value_data = rawptr(state)}
-		temporary := any{value_data, metadata.value.id}
-		if install_error := unmarshal_assign_value(
-			state, entry.value, temporary,
-		); install_error != nil {
-			unmarshal_cleanup_value(state, temporary)
-			release_owned_memory(
-				&state.builder.gate, value_memory, value_info.size, state.loc,
-			)
-			release_owned_memory(
-				&state.builder.gate, raw_data(owned_key), len(owned_key), state.loc,
-			)
-			return install_error
-		}
 		_, insert_error := runtime.__dynamic_map_set_without_hash(
 			raw_map,
 			metadata.map_info,
 			&key_raw,
-			value_data,
+			zero_data,
 			state.loc,
 		)
 		if insert_error != nil {
-			unmarshal_cleanup_value(state, temporary)
-			release_owned_memory(
-				&state.builder.gate, value_memory, value_info.size, state.loc,
-			)
 			release_owned_memory(
 				&state.builder.gate, raw_data(owned_key), len(owned_key), state.loc,
+			)
+			unmarshal_remove_map_entries(
+				state, source, raw_map, metadata, 0, staged_count,
+			)
+			release_owned_memory(
+				&state.builder.gate, zero_memory, value_info.size, state.loc,
 			)
 			return insert_error
 		}
 		key_raw = {}
-		unmarshal_zero_slot(temporary)
-		release_owned_memory(
-			&state.builder.gate, value_memory, value_info.size, state.loc,
+		staged_count += 1
+	}
+	release_owned_memory(
+		&state.builder.gate, zero_memory, value_info.size, state.loc,
+	)
+
+	for entry, index in source {
+		lookup := transmute(runtime.Raw_String)entry.key
+		hash := metadata.map_info.key_hasher(&lookup, runtime.map_seed(raw_map^))
+		value_data := runtime.__dynamic_map_get(
+			raw_map, metadata.map_info, hash, &lookup,
 		)
+		assert(value_data != nil)
+		value_slot := any{value_data, metadata.value.id}
+		node_id, binding_range_id, _, value_source := unmarshal_source_for_entry(
+			state, parent_node, parent_range, index, fallback_source,
+		)
+		if depth_error := unmarshal_enter_unstable_key(
+			state, value_source, metadata.value.id, unmarshal_value_kind(entry.value),
+		); depth_error != nil {
+			unmarshal_remove_map_entries(
+				state, source, raw_map, metadata, index, len(source),
+			)
+			return depth_error
+		}
+		commit_before := state.opaque_commit_count
+		install_error := unmarshal_assign_value(
+			state,
+			entry.value,
+			value_slot,
+			node_id,
+			binding_range_id,
+			unmarshal_source(value_source),
+		)
+		unmarshal_leave_unstable_key(state)
+		if install_error != nil {
+			opaque_committed := state.opaque_commit_count != commit_before
+			first_removal := index
+			if opaque_committed {
+				first_removal += 1
+			}
+			unmarshal_remove_map_entries(
+				state,
+				source,
+				raw_map,
+				metadata,
+				first_removal,
+				len(source),
+				!opaque_committed,
+			)
+			return install_error
+		}
 	}
 	return nil
 }
@@ -1406,7 +1532,14 @@ unmarshal_assign_value :: proc(
 	state: ^Unmarshal_State,
 	source: Value,
 	destination: any,
+	node_id, binding_range_id: int,
+	source_range: Optional_Source_Range,
 ) -> Unmarshal_Error {
+	if codec_error, handled := unmarshal_codec_value(
+		state, source, destination, source_range,
+	); handled {
+		return codec_error
+	}
 	if destination.id == typeid_of(temporal.Offset_Date_Time) {
 		(^temporal.Offset_Date_Time)(destination.data)^ = source.(temporal.Offset_Date_Time)
 		return nil
@@ -1423,6 +1556,8 @@ unmarshal_assign_value :: proc(
 		(^temporal.Local_Time)(destination.data)^ = source.(temporal.Local_Time)
 		return nil
 	}
+	fallback_source := Source_Range{}
+	if source_range.ok {fallback_source = source_range.value}
 	info := reflect.type_info_base(type_info_of(destination.id))
 	#partial switch metadata in info.variant {
 	case runtime.Type_Info_String:
@@ -1440,14 +1575,35 @@ unmarshal_assign_value :: proc(
 	case runtime.Type_Info_Float:
 		unmarshal_assign_float(destination, source.(Float))
 	case runtime.Type_Info_Struct:
-		return unmarshal_assign_struct(state, source.(Table), destination)
+		return unmarshal_assign_struct(
+			state,
+			source.(Table),
+			destination,
+			unmarshal_child_parent_node(state, node_id),
+			binding_range_id,
+			fallback_source,
+		)
 	case runtime.Type_Info_Array:
 		return unmarshal_assign_sequence(
-			state, source.(Array), destination.data, metadata.elem.id, metadata.elem_size,
+			state,
+			source.(Array),
+			destination.data,
+			metadata.elem.id,
+			metadata.elem_size,
+			node_id,
+			binding_range_id,
+			fallback_source,
 		)
 	case runtime.Type_Info_Enumerated_Array:
 		return unmarshal_assign_sequence(
-			state, source.(Array), destination.data, metadata.elem.id, metadata.elem_size,
+			state,
+			source.(Array),
+			destination.data,
+			metadata.elem.id,
+			metadata.elem_size,
+			node_id,
+			binding_range_id,
+			fallback_source,
 		)
 	case runtime.Type_Info_Slice:
 		array := source.(Array)
@@ -1458,6 +1614,7 @@ unmarshal_assign_value :: proc(
 		raw^ = {data = memory, len = len(array)}
 		return unmarshal_assign_sequence(
 			state, array, memory, metadata.elem.id, metadata.elem_size,
+			node_id, binding_range_id, fallback_source,
 		)
 	case runtime.Type_Info_Dynamic_Array:
 		array := source.(Array)
@@ -1473,21 +1630,44 @@ unmarshal_assign_value :: proc(
 		}
 		return unmarshal_assign_sequence(
 			state, array, memory, metadata.elem.id, metadata.elem_size,
+			node_id, binding_range_id, fallback_source,
 		)
 	case runtime.Type_Info_Map:
-		return unmarshal_assign_map(state, source.(Table), destination, metadata)
+		return unmarshal_assign_map(
+			state,
+			source.(Table),
+			destination,
+			metadata,
+			unmarshal_child_parent_node(state, node_id),
+			binding_range_id,
+			fallback_source,
+		)
 	case runtime.Type_Info_Pointer:
 		size := max(metadata.elem.size, 1)
 		memory, err := unmarshal_install_storage(state, size, metadata.elem.align)
 		if err != nil {return err}
 		(^rawptr)(destination.data)^ = memory
-		return unmarshal_assign_value(state, source, any{memory, metadata.elem.id})
+		return unmarshal_assign_value(
+			state,
+			source,
+			any{memory, metadata.elem.id},
+			node_id,
+			binding_range_id,
+			source_range,
+		)
 	case runtime.Type_Info_Union:
 		variant := metadata.variants[0]
 		if !reflect.type_info_union_is_pure_maybe(metadata) {
 			reflect.set_union_variant_typeid(destination, variant.id)
 		}
-		return unmarshal_assign_value(state, source, any{destination.data, variant.id})
+		return unmarshal_assign_value(
+			state,
+			source,
+			any{destination.data, variant.id},
+			node_id,
+			binding_range_id,
+			source_range,
+		)
 	case:
 		unreachable()
 	}
@@ -1499,16 +1679,39 @@ unmarshal_assign_struct :: proc(
 	state: ^Unmarshal_State,
 	source: Table,
 	destination: any,
+	parent_node, parent_range: int,
+	fallback_source: Source_Range,
 ) -> Unmarshal_Error {
 	parser := Marshal_Builder{max_depth = SEMANTIC_MAX_DEPTH}
-	for entry in source {
-		_, field, matched := marshal_projected_field_value_by_name(
+	for entry, index in source {
+		stable_name, field, matched := marshal_projected_field_value_by_name(
 			&parser, destination, entry.key,
 		)
 		if !matched {
 			continue
 		}
-		if err := unmarshal_assign_value(state, entry.value, field); err != nil {
+		node_id, binding_range_id, _, value_source := unmarshal_source_for_entry(
+			state, parent_node, parent_range, index, fallback_source,
+		)
+		if path_error := unmarshal_push_path(
+			state,
+			stable_name,
+			value_source,
+			field.id,
+			unmarshal_value_kind(entry.value),
+		); path_error != nil {
+			return path_error
+		}
+		err := unmarshal_assign_value(
+			state,
+			entry.value,
+			field,
+			node_id,
+			binding_range_id,
+			unmarshal_source(value_source),
+		)
+		unmarshal_pop_path(state)
+		if err != nil {
 			return err
 		}
 	}
@@ -1516,7 +1719,13 @@ unmarshal_assign_struct :: proc(
 }
 
 @(private)
-unmarshal_root_shape_is_valid :: proc(destination_type: typeid) -> bool {
+unmarshal_root_shape_is_valid :: proc(
+	state: ^Unmarshal_State,
+	destination_type: typeid,
+) -> bool {
+	if unmarshal_codec_registered(state, destination_type) {
+		return true
+	}
 	current := destination_type
 	for _ in 0..=SEMANTIC_MAX_DEPTH {
 		info := reflect.type_info_base(type_info_of(current))
@@ -1530,10 +1739,12 @@ unmarshal_root_shape_is_valid :: proc(destination_type: typeid) -> bool {
 		case runtime.Type_Info_Pointer:
 			if metadata.elem == nil {return false}
 			current = metadata.elem.id
+			if unmarshal_codec_registered(state, current) {return true}
 			continue
 		case runtime.Type_Info_Union:
 			if metadata.no_nil || len(metadata.variants) != 1 {return false}
 			current = metadata.variants[0].id
+			if unmarshal_codec_registered(state, current) {return true}
 			continue
 		}
 		return false
@@ -1568,6 +1779,7 @@ unmarshal_document :: proc(
 		loc = loc,
 		max_depth = max_depth,
 		reject_unknown_fields = options.reject_unknown_fields,
+		codecs = options.codecs,
 	}
 	state.parser.root = document.root
 	state.parser.nodes = nodes
@@ -1582,7 +1794,7 @@ unmarshal_document :: proc(
 	}
 
 	destination_value := any{destination, destination_type}
-	if !unmarshal_root_shape_is_valid(destination_type) {
+	if !unmarshal_root_shape_is_valid(&state, destination_type) {
 		return unmarshal_diagnostic(
 			&state, .Invalid_Root_Shape, destination_type, .Table,
 		)
@@ -1598,7 +1810,7 @@ unmarshal_document :: proc(
 	); preflight_error != nil {
 		return preflight_error
 	}
-	return unmarshal_assign_value(&state, root, destination_value)
+	return unmarshal_assign_value(&state, root, destination_value, 0, 0, {})
 }
 
 @(require_results)

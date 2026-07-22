@@ -180,6 +180,57 @@ register_unmarshaler :: proc(
 }
 
 @(private)
+unmarshal_codec_registered :: proc(
+	state: ^Unmarshal_State,
+	destination_type: typeid,
+) -> bool {
+	if destination_type == typeid_of(any) || state.codecs == nil {
+		return false
+	}
+	_, found := state.codecs.unmarshalers[destination_type]
+	return found
+}
+
+@(private)
+unmarshal_codec_value :: proc(
+	state: ^Unmarshal_State,
+	source: Value,
+	destination: any,
+	source_range: Optional_Source_Range,
+) -> (Unmarshal_Error, bool) {
+	if !unmarshal_codec_registered(state, destination.id) {
+		return nil, false
+	}
+	unmarshaler := state.codecs.unmarshalers[destination.id]
+	borrowed_source := source
+	callback_error := unmarshaler.procedure(
+		&borrowed_source,
+		destination,
+		unmarshaler.user_data,
+		state.allocator,
+		state.loc,
+	)
+	if callback_error == nil {
+		state.opaque_commit_count += 1
+		return nil, true
+	}
+	unmarshal_zero_slot(destination)
+	if allocator_error, ok := callback_error.(runtime.Allocator_Error); ok {
+		return allocator_error, true
+	}
+	failure := callback_error.(Codec_Callback_Failure)
+	assert(failure.code != 0, "codec callback failure codes must be nonzero")
+	return Unmarshal_Diagnostic{
+		detail = Unmarshal_Codec_Error{
+			registered_type = destination.id,
+			code = failure.code,
+		},
+		source = source_range,
+		path = unmarshal_path_snapshot(state),
+	}, true
+}
+
+@(private)
 marshal_codec_value :: proc(
 	builder: ^Marshal_Builder,
 	source: any,
